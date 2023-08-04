@@ -15,7 +15,7 @@ use iced::{
 };
 
 #[derive(FromArgs)]
-/// Differ
+/// binary differ
 struct Args {
     /// input file
     #[argh(positional)]
@@ -60,8 +60,8 @@ fn read_file(path: &Path) -> std::result::Result<BinFile, Error> {
     );
 
     Ok(BinFile {
-        file_name: path.file_name().unwrap().to_str().unwrap().to_string(),
-        file_data: buffer,
+        name: path.file_name().unwrap().to_str().unwrap().to_string(),
+        data: buffer,
     })
 }
 
@@ -69,6 +69,23 @@ fn read_file(path: &Path) -> std::result::Result<BinFile, Error> {
 struct HexView {
     file: BinFile,
     cur_pos: usize,
+    num_rows: u32,
+    bytes_per_row: u32,
+}
+
+impl HexView {
+    fn set_cur_pos(&mut self, val: usize) {
+        self.cur_pos = val.min(self.file.data.len())
+    }
+
+    fn adjust_cur_pos(&mut self, delta: i32) {
+        self.cur_pos =
+            (self.cur_pos as i32 + delta).clamp(0, self.file.data.len() as i32 - 0x20) as usize;
+    }
+
+    fn bytes_per_screen(&self) -> i32 {
+        (self.bytes_per_row * self.num_rows) as i32
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -99,10 +116,12 @@ impl Application for HexView {
         (
             HexView {
                 file: BinFile {
-                    file_name: String::from("Loading"),
-                    file_data: vec![],
+                    name: String::from("Loading"),
+                    data: vec![],
                 },
                 cur_pos: 0,
+                num_rows: 30,
+                bytes_per_row: 0x10,
             },
             Command::perform(async { read_file_result }, Message::FileLoaded),
         )
@@ -118,16 +137,45 @@ impl Application for HexView {
                 *self = HexView {
                     file: bin_file,
                     cur_pos: 0,
+                    num_rows: 30,
+                    bytes_per_row: 0x10,
                 };
                 Command::none()
             }
             Message::FileLoaded(Err(_error)) => Command::none(),
             Message::EventOccurred(event) => {
-                if let Event::Mouse(iced::mouse::Event::WheelScrolled {
-                    delta: iced::mouse::ScrollDelta::Lines { y, .. },
-                }) = event
-                {
-                    self.cur_pos = (self.cur_pos as i32 - y as i32 * 0x10).max(0) as usize;
+                match event {
+                    Event::Mouse(iced::mouse::Event::WheelScrolled {
+                        delta: iced::mouse::ScrollDelta::Lines { y, .. },
+                    }) => {
+                        self.cur_pos = (self.cur_pos as i32 - y as i32 * self.bytes_per_row as i32)
+                            .max(0) as usize;
+                    }
+                    Event::Keyboard(iced::keyboard::Event::KeyPressed { key_code, .. }) => {
+                        match key_code {
+                            iced::keyboard::KeyCode::Home => self.set_cur_pos(0),
+                            iced::keyboard::KeyCode::End => self.set_cur_pos(
+                                self.file.data.len() - self.bytes_per_screen() as usize,
+                            ),
+                            iced::keyboard::KeyCode::PageDown => {
+                                self.adjust_cur_pos(self.bytes_per_screen())
+                            }
+                            iced::keyboard::KeyCode::PageUp => {
+                                self.adjust_cur_pos(-self.bytes_per_screen())
+                            }
+                            iced::keyboard::KeyCode::Left => self.adjust_cur_pos(-1),
+                            iced::keyboard::KeyCode::Up => {
+                                self.adjust_cur_pos(-(self.bytes_per_row as i32))
+                            }
+                            iced::keyboard::KeyCode::Right => self.adjust_cur_pos(1),
+                            iced::keyboard::KeyCode::Down => {
+                                self.adjust_cur_pos(self.bytes_per_row as i32)
+                            }
+                            iced::keyboard::KeyCode::Enter => todo!(),
+                            _ => (),
+                        }
+                    }
+                    _ => (),
                 }
 
                 Command::none()
@@ -141,7 +189,7 @@ impl Application for HexView {
 
     fn view(&self) -> Element<Message> {
         let content = {
-            let file_name_text: Text = Text::new(self.file.file_name.clone())
+            let file_name_text: Text = Text::new(self.file.name.clone())
                 .font(Font::with_name("Calibri"))
                 .size(24);
 
@@ -152,10 +200,10 @@ impl Application for HexView {
 
             let mut rows = Vec::new();
 
-            while i < num_rows && cur_offset + 0x10 < self.file.file_data.len() {
+            while i < num_rows && cur_offset + 0x10 < self.file.data.len() {
                 let hex_row = HexRow {
                     offset: cur_offset,
-                    data: self.file.file_data[cur_offset..cur_offset + 0x10].to_vec(),
+                    data: self.file.data[cur_offset..cur_offset + 0x10].to_vec(),
                 };
 
                 rows.push(hex_row);
@@ -244,8 +292,8 @@ impl Application for HexView {
 
 #[derive(Default, Debug, Clone)]
 struct BinFile {
-    file_name: String,
-    file_data: Vec<u8>,
+    name: String,
+    data: Vec<u8>,
 }
 
 #[derive(Debug, Clone)]
