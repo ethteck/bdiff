@@ -1,0 +1,10 @@
+[package]
+name = "bdiff"
+version = "0.1.0"
+edition = "2021"
+authors = ["Ethan Roseman <ethteck@gmail.com>"]
+license = "MIT"
+
+[dependencies]
+argh = "0.1.10"
+iced = { version = "0.10.0", features = ["image"] }

@@ -1,0 +1,25 @@
+use std::path::Path;
+
+use iced::window::{self, icon};
+pub use iced::window::{close, Settings};
+
+pub fn settings() -> Settings {
+    let icon: Result<window::Icon, icon::Error> = load_icon();
+
+    match icon {
+        Ok(icon) => Settings {
+            icon: Some(icon),
+            ..Default::default()
+        },
+        Err(_) => Settings {
+            ..Default::default()
+        },
+    }
+}
+
+fn load_icon() -> Result<icon::Icon, icon::Error> {
+    let icon_path = Path::new("assets/icon.png");
+    let icon = icon::from_file(icon_path)?;
+
+    Ok(icon)
+}
