@@ -2,7 +2,7 @@ use iced_core::Color;
 use palette::rgb::Rgb;
 use palette::{DarkenAssign, FromColor, LightenAssign, Mix, Okhsl, Srgb};
 
-const DEFAULT_THEME_NAME: &str = "Ferra";
+const DEFAULT_THEME_NAME: &str = "DarkCod";
 
 #[derive(Debug, Clone)]
 pub struct Theme {
@@ -119,14 +119,14 @@ pub struct Palette {
 impl Default for Palette {
     fn default() -> Palette {
         Palette {
-            background: hex_to_color("#2b292d").unwrap(),
-            text: hex_to_color("#fecdb2").unwrap(),
-            action: hex_to_color("#b1b695").unwrap(),
-            accent: hex_to_color("#d1d1e0").unwrap(),
-            alert: hex_to_color("#ffa07a").unwrap(),
-            error: hex_to_color("#e06b75").unwrap(),
-            info: hex_to_color("#f5d76e").unwrap(),
-            success: hex_to_color("#b1b695").unwrap(),
+            background: hex_to_color("#2a2a2a").unwrap(),
+            text: hex_to_color("#eeeeee").unwrap(),
+            action: hex_to_color("#9382f2").unwrap(),
+            accent: hex_to_color("#d1d1d1").unwrap(),
+            alert: hex_to_color("#ffba7a").unwrap(),
+            error: hex_to_color("#ff5260").unwrap(),
+            info: hex_to_color("#b8ebf5").unwrap(),
+            success: hex_to_color("#86eaa7").unwrap(),
         }
     }
 }

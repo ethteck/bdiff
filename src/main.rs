@@ -12,13 +12,13 @@ use std::result;
 use argh::FromArgs;
 
 use error::Error;
-use iced::widget::{container, text, Column, Row, Space, Text};
-use iced::{
-    subscription, Application, Color, Command, Element, Event, Font, Renderer, Settings,
-    Subscription,
-};
+use iced::widget::container;
+use iced::widget::text;
+use iced::{subscription, Application, Command, Event, Font, Settings, Subscription};
+use widget::{Column, Row, Space};
 
 pub use self::theme::Theme;
+use self::widget::Element;
 
 use crate::widget::selectable_text;
 
@@ -148,7 +148,7 @@ impl Application for HexView {
                 cur_pos: 0,
                 num_rows: 30,
                 bytes_per_row: 0x10,
-                theme: Theme::default().clone().into(),
+                theme: Theme::default(),
             },
             Command::perform(async { read_file_result }, Message::FileLoaded),
         )
@@ -166,7 +166,7 @@ impl Application for HexView {
                     cur_pos: 0,
                     num_rows: 30,
                     bytes_per_row: 0x10,
-                    theme: Theme::default().clone().into(),
+                    theme: Theme::default(),
                 };
                 Command::none()
             }
@@ -218,14 +218,14 @@ impl Application for HexView {
 
     fn view(&self) -> Element<Message> {
         let content = {
-            let file_name_text: Text = Text::new(self.file.path.clone()).size(20);
+            let file_name_text = text(self.file.path.clone()).size(20);
 
             let hex_rows: Vec<HexRow> = self.get_cur_hex_rows();
 
-            let mut ui_rows: Vec<Element<Message, Renderer>> = hex_rows
+            let mut ui_rows: Vec<Element<Message>> = hex_rows
                 .iter()
                 .map(|row| {
-                    let mut row_children: Vec<Element<Message, Renderer>> = Vec::new();
+                    let mut row_children: Vec<Element<Message>> = Vec::new();
 
                     let offset_text: Element<Message> = Element::from(
                         text(format!(
@@ -234,19 +234,19 @@ impl Application for HexView {
                             row.offset % 0x10000
                         ))
                         .font(Font::with_name("Consolas"))
-                        .style(Color::from_rgb8(0x98, 0x98, 0x98)),
+                        .style(theme::Text::Info),
                     );
 
-                    let mut hex_text_elems: Vec<Element<Message, Renderer>> = Vec::new();
+                    let mut hex_text_elems: Vec<Element<Message>> = Vec::new();
                     for (i, byte) in row.data.iter().enumerate() {
-                        let hex_color: Color = match *byte {
-                            0 => Color::from_rgb8(0x80, 0x80, 0x80),
-                            _ => Color::WHITE,
+                        let style = match *byte {
+                            0 => theme::Text::Fainter,
+                            _ => theme::Text::Default,
                         };
 
-                        let text_element = text(format!("{:02X?}", byte))
+                        let text_element = selectable_text(format!("{:02X?}", byte))
                             .font(Font::with_name("Consolas"))
-                            .style(hex_color);
+                            .style(style);
 
                         if i > 0 {
                             if (i % 8) == 0 {
@@ -258,29 +258,26 @@ impl Application for HexView {
                         hex_text_elems.push(Element::from(text_element));
                     }
 
-                    let mut ascii_texts: Vec<Element<Message, Renderer>> = row
-                        .data
-                        .iter()
-                        .map(|byte| {
-                            let ascii_char: char = match *byte {
-                                32..=126 => *byte as char,
-                                _ => '·',
-                            };
-                            let ascii_color: Color = match *byte {
-                                0 => Color::from_rgb8(0x40, 0x40, 0x40),
-                                32..=126 => Color::WHITE,
-                                _ => Color::from_rgb8(0x80, 0x80, 0x80),
-                            };
-                            text(ascii_char)
-                                .font(Font::with_name("Consolas"))
-                                .style(ascii_color)
-                        })
-                        .map(Element::from)
-                        .collect();
+                    let mut ascii_texts: Vec<Element<Message>> = Vec::new();
 
-                    let somethin = selectable_text("MEOW test 123   ahahaha");
+                    for byte in &row.data {
+                        let ascii_char: char = match *byte {
+                            32..=126 => *byte as char,
+                            _ => '·',
+                        };
 
-                    row_children.push(Element::from(somethin));
+                        let style = match *byte {
+                            0 => theme::Text::Faintest,
+                            32..=126 => theme::Text::Default,
+                            _ => theme::Text::Fainter,
+                        };
+
+                        let text_element = selectable_text(ascii_char)
+                            .font(Font::with_name("Consolas"))
+                            .style(style);
+                        ascii_texts.push(Element::from(text_element));
+                    }
+
                     row_children.push(offset_text);
                     row_children.push(Element::from(Space::with_width(10)));
                     row_children.append(&mut hex_text_elems);

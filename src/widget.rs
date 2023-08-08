@@ -1,5 +1,4 @@
 pub use self::selectable_text::selectable_text;
-
 use crate::Theme;
 
 pub mod selectable_text;
@@ -11,3 +10,6 @@ pub type TitleBar<'a, Message> = iced::widget::pane_grid::TitleBar<'a, Message, 
 pub type Column<'a, Message> = iced::widget::Column<'a, Message, Renderer>;
 pub type Row<'a, Message> = iced::widget::Row<'a, Message, Renderer>;
 pub type Text<'a> = iced::widget::Text<'a, Renderer>;
+pub type Container<'a, Message> = iced::widget::Container<'a, Message, Renderer>;
+pub type Button<'a, Message> = iced::widget::Button<'a, Message>;
+pub type Space = iced::widget::Space;

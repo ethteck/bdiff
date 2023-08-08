@@ -8,7 +8,7 @@ use iced::{
     alignment, event, touch, Color, Command, Element, Length, Pixels, Point, Rectangle, Size,
 };
 
-use self::selection::selection;
+use self::selection::{selection, Selection};
 pub use self::text::{LineHeight, Shaping};
 
 mod selection;
@@ -217,114 +217,75 @@ where
 
         let state = tree.state.downcast_ref::<State>();
 
-        if let Some(selection) = state.selection().and_then(|raw| raw.resolve(bounds)) {
+        let value = Value::new(&self.content);
+
+        // TODO: This method is better for ensuring whole letters are visually selected,
+        // but breaks down once wrapping comes to play.
+        if let Some(Selection { start, end }) = state.selection().and_then(|raw| {
+            selection(
+                raw,
+                renderer,
+                self.font,
+                self.size,
+                self.line_height,
+                layout.bounds(),
+                &value,
+            )
+        }) {
+            let pre_value = (start > 0).then(|| value.select(0, start));
+            let value = value.select(start, end);
+
+            let pre_width = pre_value
+                .as_ref()
+                .map(|value| measure(renderer, value, self.size, self.font));
+            let selected_width = measure(renderer, &value, self.size, self.font);
+
             let line_height = f32::from(
                 self.line_height
                     .to_absolute(self.size.unwrap_or_else(|| renderer.default_size()).into()),
             );
 
-            let baseline_y =
-                bounds.y + ((selection.start.y - bounds.y) / line_height).floor() * line_height;
+            let bounds = layout.bounds();
 
-            let height = selection.end.y - baseline_y - 0.5;
-            let rows = (height / line_height).ceil() as usize;
+            let mut position = bounds.position();
+            let mut remaining = pre_width.unwrap_or_default();
 
-            for row in 0..rows {
-                let (x, width) = if row == 0 {
-                    (
-                        selection.start.x,
-                        if rows == 1 {
-                            f32::min(selection.end.x, bounds.x + bounds.width) - selection.start.x
-                        } else {
-                            bounds.x + bounds.width - selection.start.x
-                        },
-                    )
-                } else if row == rows - 1 {
-                    (bounds.x, selection.end.x - bounds.x)
+            while remaining > 0.0 {
+                let max_width = bounds.width - (position.x - bounds.x);
+                let width = remaining.min(max_width);
+
+                position = if width == max_width {
+                    Point::new(bounds.x, position.y + line_height)
                 } else {
-                    (bounds.x, bounds.width)
+                    Point::new(position.x + width, position.y)
                 };
-                let y = baseline_y + row as f32 * line_height;
+                remaining -= width;
+            }
+
+            let mut remaining = selected_width;
+
+            while remaining > 0.0 {
+                let max_width = bounds.width - (position.x - bounds.x);
+                let width = remaining.min(max_width);
 
                 renderer.fill_quad(
                     Quad {
-                        bounds: Rectangle::new(Point::new(x, y), Size::new(width, line_height)),
+                        bounds: Rectangle::new(position, Size::new(width, line_height)),
                         border_radius: 0.0.into(),
                         border_width: 0.0,
                         border_color: Color::TRANSPARENT,
                     },
                     appearance.selection_color,
                 );
+
+                position = if width == max_width {
+                    Point::new(bounds.x, position.y + line_height)
+                } else {
+                    Point::new(position.x + width, position.y)
+                };
+                remaining -= width;
             }
         }
-
-        // TODO: This method is better for ensuring whole letters are visually selected,
-        // but breaks down once wrapping comes to play.
-        // if let Some(Selection { start, end }) = state.selection().and_then(|raw| {
-        //     selection(
-        //         raw,
-        //         renderer,
-        //         self.font,
-        //         self.size,
-        //         self.line_height,
-        //         layout.bounds(),
-        //         &value,
-        //     )
-        // }) {
-        //     let pre_value = (start > 0).then(|| value.select(0, start));
-        //     let value = value.select(start, end);
-
-        //     let pre_width = pre_value
-        //         .as_ref()
-        //         .map(|value| measure(renderer, value, self.size, self.font));
-        //     let selected_width = measure(renderer, &value, self.size, self.font);
-
-        //     let line_height = f32::from(
-        //         self.line_height
-        //             .to_absolute(self.size.unwrap_or_else(|| renderer.default_size()).into()),
-        //     );
-
-        //     let bounds = layout.bounds();
-
-        //     let mut position = bounds.position();
-        //     let mut remaining = pre_width.unwrap_or_default();
-
-        //     while remaining > 0.0 {
-        //         let max_width = bounds.width - (position.x - bounds.x);
-        //         let width = remaining.min(max_width);
-
-        //         position = if width == max_width {
-        //             Point::new(bounds.x, position.y + line_height)
-        //         } else {
-        //             Point::new(position.x + width, position.y)
-        //         };
-        //         remaining -= width;
-        //     }
-
-        //     let mut remaining = selected_width;
-
-        //     while remaining > 0.0 {
-        //         let max_width = bounds.width - (position.x - bounds.x);
-        //         let width = remaining.min(max_width);
-
-        //         renderer.fill_quad(
-        //             Quad {
-        //                 bounds: Rectangle::new(position, Size::new(width, line_height)),
-        //                 border_radius: 0.0.into(),
-        //                 border_width: 0.0,
-        //                 border_color: Color::TRANSPARENT,
-        //             },
-        //             theme.selection_color(&self.style),
-        //         );
-
-        //         position = if width == max_width {
-        //             Point::new(bounds.x, position.y + line_height)
-        //         } else {
-        //             Point::new(position.x + width, position.y)
-        //         };
-        //         remaining -= width;
-        //     }
-        // }
 
         draw(
             renderer,
@@ -383,6 +344,7 @@ where
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw<Renderer>(
     renderer: &mut Renderer,
     layout: Layout<'_>,

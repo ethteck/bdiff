@@ -104,9 +104,10 @@ pub enum Text {
     Action,
     Accent,
     Info,
-    Server,
     Error,
     Transparent,
+    Fainter,
+    Faintest,
 }
 
 impl text::StyleSheet for Theme {
@@ -130,11 +131,14 @@ impl text::StyleSheet for Theme {
             Text::Error => text::Appearance {
                 color: Some(self.colors().error.base),
             },
-            Text::Server => text::Appearance {
-                color: Some(self.colors().info.base),
-            },
             Text::Transparent => text::Appearance {
                 color: Some(self.colors().text.low_alpha),
+            },
+            Text::Fainter => text::Appearance {
+                color: Some(self.colors().text.med_alpha),
+            },
+            Text::Faintest => text::Appearance {
+                color: Some(self.colors().text.high_alpha),
             },
         }
     }
