@@ -1,8 +1,8 @@
-pub mod error;
+mod error;
 pub mod theme;
 pub mod theme_data;
 pub mod widget;
-pub mod window;
+mod window;
 
 use std::fs::File;
 use std::io::{BufReader, Read};
@@ -12,8 +12,8 @@ use std::result;
 use argh::FromArgs;
 
 use error::Error;
-use iced::widget::container;
 use iced::widget::text;
+use iced::widget::{container, row};
 use iced::{subscription, Application, Command, Event, Font, Settings, Subscription};
 use widget::{Column, Row, Space};
 
@@ -222,74 +222,79 @@ impl Application for HexView {
 
             let hex_rows: Vec<HexRow> = self.get_cur_hex_rows();
 
-            let mut ui_rows: Vec<Element<Message>> = hex_rows
-                .iter()
-                .map(|row| {
-                    let mut row_children: Vec<Element<Message>> = Vec::new();
+            let mut offsets_col_vec: Vec<Element<Message>> = Vec::new();
+            let mut hex_col_vec: Vec<Element<Message>> = Vec::new();
+            let mut ascii_col_vec: Vec<Element<Message>> = Vec::new();
 
-                    let offset_text: Element<Message> = Element::from(
-                        text(format!(
-                            "{:04X?} {:04X?}",
-                            row.offset >> 0x10,
-                            row.offset % 0x10000
-                        ))
+            for row in hex_rows.iter() {
+                let offset_text = text(format!(
+                    "{:04X?} {:04X?}",
+                    row.offset >> 0x10,
+                    row.offset % 0x10000
+                ))
+                .font(Font::with_name("Consolas"))
+                .style(theme::Text::Info);
+
+                let mut hex_text_elems: Vec<Element<Message>> = Vec::new();
+                for (i, byte) in row.data.iter().enumerate() {
+                    let style = match *byte {
+                        0 => theme::Text::Fainter,
+                        _ => theme::Text::Default,
+                    };
+
+                    let text_element = selectable_text(format!("{:02X?}", byte))
                         .font(Font::with_name("Consolas"))
-                        .style(theme::Text::Info),
-                    );
+                        .style(style);
 
-                    let mut hex_text_elems: Vec<Element<Message>> = Vec::new();
-                    for (i, byte) in row.data.iter().enumerate() {
-                        let style = match *byte {
-                            0 => theme::Text::Fainter,
-                            _ => theme::Text::Default,
-                        };
-
-                        let text_element = selectable_text(format!("{:02X?}", byte))
-                            .font(Font::with_name("Consolas"))
-                            .style(style);
-
-                        if i > 0 {
-                            if (i % 8) == 0 {
-                                hex_text_elems.push(Element::from(Space::with_width(10)));
-                            } else {
-                                hex_text_elems.push(Element::from(Space::with_width(5)));
-                            }
+                    if i > 0 {
+                        if (i % 8) == 0 {
+                            hex_text_elems.push(Element::from(Space::with_width(10)));
+                        } else {
+                            hex_text_elems.push(Element::from(Space::with_width(5)));
                         }
-                        hex_text_elems.push(Element::from(text_element));
                     }
+                    hex_text_elems.push(Element::from(text_element));
+                }
+                let hex_text = Row::with_children(hex_text_elems);
 
-                    let mut ascii_texts: Vec<Element<Message>> = Vec::new();
+                let mut ascii_text_elems: Vec<Element<Message>> = Vec::new();
+                for byte in &row.data {
+                    let ascii_char: char = match *byte {
+                        32..=126 => *byte as char,
+                        _ => '·',
+                    };
 
-                    for byte in &row.data {
-                        let ascii_char: char = match *byte {
-                            32..=126 => *byte as char,
-                            _ => '·',
-                        };
+                    let style = match *byte {
+                        0 => theme::Text::Faintest,
+                        32..=126 => theme::Text::Default,
+                        _ => theme::Text::Fainter,
+                    };
 
-                        let style = match *byte {
-                            0 => theme::Text::Faintest,
-                            32..=126 => theme::Text::Default,
-                            _ => theme::Text::Fainter,
-                        };
+                    let text_element = selectable_text(ascii_char)
+                        .font(Font::with_name("Consolas"))
+                        .style(style);
+                    ascii_text_elems.push(Element::from(text_element));
+                }
+                let ascii_text = Row::with_children(ascii_text_elems);
 
-                        let text_element = selectable_text(ascii_char)
-                            .font(Font::with_name("Consolas"))
-                            .style(style);
-                        ascii_texts.push(Element::from(text_element));
-                    }
+                offsets_col_vec.push(Element::from(offset_text));
+                hex_col_vec.push(Element::from(hex_text));
+                ascii_col_vec.push(Element::from(ascii_text));
+            }
 
-                    row_children.push(offset_text);
-                    row_children.push(Element::from(Space::with_width(10)));
-                    row_children.append(&mut hex_text_elems);
-                    row_children.push(Element::from(Space::with_width(10)));
-                    row_children.append(&mut ascii_texts);
+            let offsets_col = Column::with_children(offsets_col_vec);
+            let hex_col = Column::with_children(hex_col_vec);
+            let ascii_col = Column::with_children(ascii_col_vec);
 
-                    Row::with_children(row_children)
-                })
-                .map(Element::from)
-                .collect();
+            let data_row = row![]
+                .push(offsets_col)
+                .push(Space::with_width(10))
+                .push(hex_col)
+                .push(Space::with_width(10))
+                .push(ascii_col);
 
-            ui_rows.insert(0, Element::from(file_name_text));
+            let ui_rows: Vec<Element<Message>> =
+                vec![Element::from(file_name_text), Element::from(data_row)];
 
             let hex_table = Column::with_children(ui_rows);
 
