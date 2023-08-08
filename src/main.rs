@@ -14,7 +14,7 @@ use argh::FromArgs;
 use error::Error;
 use iced::widget::text;
 use iced::widget::{container, row};
-use iced::{subscription, Application, Command, Event, Font, Settings, Subscription};
+use iced::{clipboard, subscription, Application, Command, Event, Font, Settings, Subscription};
 use widget::{Column, Row, Space};
 
 pub use self::theme::Theme;
@@ -122,6 +122,7 @@ impl HexView {
 enum Message {
     FileLoaded(Result<BinFile, Error>),
     EventOccurred(Event),
+    SelectedText(Vec<(f32, String)>),
 }
 
 struct HexRow {
@@ -178,6 +179,12 @@ impl Application for HexView {
                     }) => {
                         self.adjust_cur_pos(-(y as i32) * self.bytes_per_row as i32);
                     }
+                    iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                        key_code: iced::keyboard::KeyCode::C,
+                        modifiers,
+                    }) if modifiers.command() => {
+                        return selectable_text::selected(Message::SelectedText)
+                    }
                     Event::Keyboard(iced::keyboard::Event::KeyPressed { key_code, .. }) => {
                         match key_code {
                             iced::keyboard::KeyCode::Home => self.set_cur_pos(0),
@@ -207,6 +214,28 @@ impl Application for HexView {
                     _ => (),
                 }
 
+                Command::none()
+            }
+            Message::SelectedText(contents) => {
+                let mut last_y = None;
+                let contents = contents
+                    .into_iter()
+                    .fold(String::new(), |acc, (y, content)| {
+                        if let Some(_y) = last_y {
+                            let new_line = if y == _y { "" } else { "\n" };
+                            last_y = Some(y);
+
+                            format!("{acc}{new_line}{content}")
+                        } else {
+                            last_y = Some(y);
+
+                            content
+                        }
+                    });
+
+                if !contents.is_empty() {
+                    return clipboard::write(contents);
+                }
                 Command::none()
             }
         }

@@ -114,7 +114,7 @@ where
         )
         .map(text::Hit::cursor)?;
 
-    Some(char_offset) // TODO fix
+    Some(char_offset)
 }
 
 fn relative(point: Point, bounds: Rectangle) -> Point {

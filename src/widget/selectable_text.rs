@@ -219,8 +219,6 @@ where
 
         let value = Value::new(&self.content);
 
-        // TODO: This method is better for ensuring whole letters are visually selected,
-        // but breaks down once wrapping comes to play.
         if let Some(Selection { start, end }) = state.selection().and_then(|raw| {
             selection(
                 raw,
