@@ -336,7 +336,7 @@ where
                 &value,
             )
         }) {
-            let content = value.select(selection.start, selection.end).to_string();
+            let content = value.to_string();
             operation.custom(&mut (bounds.y, content), None);
         }
     }

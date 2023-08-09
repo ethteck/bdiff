@@ -15,7 +15,7 @@ use error::Error;
 use iced::widget::text;
 use iced::widget::{container, row};
 use iced::{clipboard, subscription, Application, Command, Event, Font, Settings, Subscription};
-use widget::{Column, Row, Space};
+use widget::{Column, Renderer, Row, Space};
 
 pub use self::theme::Theme;
 use self::widget::Element;
@@ -156,7 +156,7 @@ impl Application for HexView {
     }
 
     fn title(&self) -> String {
-        String::from("BDiff")
+        String::from("bdiff")
     }
 
     fn update(&mut self, message: Message) -> Command<Message> {
@@ -256,13 +256,32 @@ impl Application for HexView {
             let mut ascii_col_vec: Vec<Element<Message>> = Vec::new();
 
             for row in hex_rows.iter() {
-                let offset_text = text(format!(
-                    "{:04X?} {:04X?}",
-                    row.offset >> 0x10,
-                    row.offset % 0x10000
-                ))
-                .font(Font::with_name("Consolas"))
-                .style(theme::Text::Info);
+                let mut offset_text_elems: Vec<Element<Message>> = Vec::new();
+                let mut i = 8;
+                let mut leading = true;
+
+                while i > 0 {
+                    let digit = row.offset >> ((i - 1) * 4) & 0xF;
+
+                    if leading && digit > 0 {
+                        leading = false;
+                    }
+                    let style = match leading {
+                        true => theme::Text::Fainter,
+                        false => theme::Text::Default,
+                    };
+                    let offset_digit_text: iced_core::widget::Text<'_, Renderer> =
+                        text(format!("{:X?}", digit))
+                            .font(Font::with_name("Consolas"))
+                            .style(style);
+
+                    if i > 0 && (i % 4) == 0 {
+                        offset_text_elems.push(Element::from(Space::with_width(5)));
+                    }
+                    offset_text_elems.push(Element::from(offset_digit_text));
+                    i -= 1;
+                }
+                let offset_text = Row::with_children(offset_text_elems);
 
                 let mut hex_text_elems: Vec<Element<Message>> = Vec::new();
                 for (i, byte) in row.data.iter().enumerate() {
@@ -331,9 +350,9 @@ impl Application for HexView {
         };
 
         container(content)
-            //.style(theme::Container::Box)
-            //     .width(Length::Fill)
-            //     .height(Length::Fill)
+            .style(theme::Container::PaneBody { selected: false })
+            // .width(Length::Fill)
+            // .height(Length::Fill)
             .into()
     }
 
