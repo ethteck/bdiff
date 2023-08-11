@@ -7,4 +7,6 @@ license = "MIT"
 
 [dependencies]
 argh = "0.1.10"
-iced = { version = "0.10.0", features = ["image"] }
+iced = { version = "0.10.0", features = ["image", "advanced"] }
+iced_core = "0.10.0"
+palette = "0.7.2"
