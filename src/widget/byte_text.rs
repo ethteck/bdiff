@@ -4,21 +4,19 @@ use iced::advanced::renderer::Quad;
 use iced::advanced::widget::{operation, tree, Operation, Tree};
 use iced::advanced::{layout, mouse, renderer, text, widget, Layout, Widget};
 use iced::widget::text_input::Value;
-use iced::{
-    alignment, event, touch, Color, Command, Element, Length, Pixels, Point, Rectangle, Size,
-};
+use iced::{alignment, event, touch, Color, Command, Element, Length, Pixels, Rectangle, Size};
 
-use self::selection::{selection, Selection};
+use self::selection::selection;
 pub use self::text::{LineHeight, Shaping};
 
 mod selection;
 
-pub fn selectable_text<'a, Renderer>(content: impl ToString) -> Text<'a, Renderer>
+pub fn byte_text<'a, Renderer>(content: impl ToString, grid_pos: u32) -> Text<'a, Renderer>
 where
     Renderer: text::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    Text::new(content.to_string())
+    Text::new(content.to_string(), grid_pos)
 }
 
 pub struct Text<'a, Renderer>
@@ -36,6 +34,7 @@ where
     font: Option<Renderer::Font>,
     shaping: Shaping,
     style: <Renderer::Theme as StyleSheet>::Style,
+    grid_pos: u32,
 }
 
 impl<'a, Renderer> Text<'a, Renderer>
@@ -43,7 +42,7 @@ where
     Renderer: text::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    pub fn new(content: impl Into<Cow<'a, str>>) -> Self {
+    pub fn new(content: impl Into<Cow<'a, str>>, grid_pos: u32) -> Self {
         Text {
             content: content.into(),
             size: None,
@@ -58,6 +57,7 @@ where
             #[cfg(not(debug_assertions))]
             shaping: Shaping::Advanced,
             style: Default::default(),
+            grid_pos,
         }
     }
 
@@ -219,7 +219,7 @@ where
 
         let value = Value::new(&self.content);
 
-        if let Some(Selection { start, end }) = state.selection().and_then(|raw| {
+        if let Some(_selection) = state.selection().and_then(|raw| {
             selection(
                 raw,
                 renderer,
@@ -230,59 +230,15 @@ where
                 &value,
             )
         }) {
-            let pre_value = (start > 0).then(|| value.select(0, start));
-            let value = value.select(start, end);
-
-            let pre_width = pre_value
-                .as_ref()
-                .map(|value| measure(renderer, value, self.size, self.font));
-            let selected_width = measure(renderer, &value, self.size, self.font);
-
-            let line_height = f32::from(
-                self.line_height
-                    .to_absolute(self.size.unwrap_or_else(|| renderer.default_size()).into()),
+            renderer.fill_quad(
+                Quad {
+                    bounds: layout.bounds(),
+                    border_radius: 0.0.into(),
+                    border_width: 0.0,
+                    border_color: Color::TRANSPARENT,
+                },
+                appearance.selection_color,
             );
-
-            let bounds = layout.bounds();
-
-            let mut position = bounds.position();
-            let mut remaining = pre_width.unwrap_or_default();
-
-            while remaining > 0.0 {
-                let max_width = bounds.width - (position.x - bounds.x);
-                let width = remaining.min(max_width);
-
-                position = if width == max_width {
-                    Point::new(bounds.x, position.y + line_height)
-                } else {
-                    Point::new(position.x + width, position.y)
-                };
-                remaining -= width;
-            }
-
-            let mut remaining = selected_width;
-
-            while remaining > 0.0 {
-                let max_width = bounds.width - (position.x - bounds.x);
-                let width = remaining.min(max_width);
-
-                renderer.fill_quad(
-                    Quad {
-                        bounds: Rectangle::new(position, Size::new(width, line_height)),
-                        border_radius: 0.0.into(),
-                        border_width: 0.0,
-                        border_color: Color::TRANSPARENT,
-                    },
-                    appearance.selection_color,
-                );
-
-                position = if width == max_width {
-                    Point::new(bounds.x, position.y + line_height)
-                } else {
-                    Point::new(position.x + width, position.y)
-                };
-                remaining -= width;
-            }
         }
 
         draw(
@@ -325,7 +281,7 @@ where
 
         let bounds = layout.bounds();
         let value = Value::new(&self.content);
-        if let Some(selection) = state.selection().and_then(|raw| {
+        if let Some(_selection) = state.selection().and_then(|raw| {
             selection(
                 raw,
                 renderer,
@@ -337,7 +293,7 @@ where
             )
         }) {
             let content = value.to_string();
-            operation.custom(&mut (bounds.y, content), None);
+            operation.custom(&mut (self.grid_pos, content), None);
         }
     }
 }
@@ -413,25 +369,10 @@ impl State {
     }
 }
 
-fn measure<Renderer>(
-    renderer: &Renderer,
-    value: &Value,
-    size: Option<f32>,
-    font: Option<Renderer::Font>,
-) -> f32
-where
-    Renderer: text::Renderer,
-{
-    let size = size.unwrap_or_else(|| renderer.default_size());
-    let font = font.unwrap_or_else(|| renderer.default_font());
-
-    renderer.measure_width(&value.to_string(), size, font, text::Shaping::Advanced)
-}
-
-pub fn selected<Message: 'static>(f: fn(Vec<(f32, String)>) -> Message) -> Command<Message> {
+pub fn selected<Message: 'static>(f: fn(Vec<(u32, String)>) -> Message) -> Command<Message> {
     struct Selected<T> {
-        contents: Vec<(f32, String)>,
-        f: fn(Vec<(f32, String)>) -> T,
+        contents: Vec<(u32, String)>,
+        f: fn(Vec<(u32, String)>) -> T,
     }
 
     impl<T> Operation<T> for Selected<T> {
@@ -445,7 +386,7 @@ pub fn selected<Message: 'static>(f: fn(Vec<(f32, String)>) -> Message) -> Comma
         }
 
         fn custom(&mut self, state: &mut dyn std::any::Any, _id: Option<&widget::Id>) {
-            if let Some(content) = state.downcast_ref::<(f32, String)>() {
+            if let Some(content) = state.downcast_ref::<(u32, String)>() {
                 self.contents.push(content.clone());
             }
         }

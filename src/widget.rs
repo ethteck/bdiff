@@ -1,7 +1,7 @@
-pub use self::selectable_text::selectable_text;
+pub use self::byte_text::byte_text;
 use crate::Theme;
 
-pub mod selectable_text;
+pub mod byte_text;
 
 pub type Renderer = iced::Renderer<Theme>;
 pub type Element<'a, Message> = iced::Element<'a, Message, Renderer>;

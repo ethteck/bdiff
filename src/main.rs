@@ -20,7 +20,7 @@ use widget::{Column, Renderer, Row, Space};
 pub use self::theme::Theme;
 use self::widget::Element;
 
-use crate::widget::selectable_text;
+use crate::widget::byte_text;
 
 #[derive(FromArgs)]
 /// binary differ
@@ -122,7 +122,7 @@ impl HexView {
 enum Message {
     FileLoaded(Result<BinFile, Error>),
     EventOccurred(Event),
-    SelectedText(Vec<(f32, String)>),
+    SelectedText(Vec<(u32, String)>),
 }
 
 struct HexRow {
@@ -182,9 +182,7 @@ impl Application for HexView {
                     iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
                         key_code: iced::keyboard::KeyCode::C,
                         modifiers,
-                    }) if modifiers.command() => {
-                        return selectable_text::selected(Message::SelectedText)
-                    }
+                    }) if modifiers.command() => return byte_text::selected(Message::SelectedText),
                     Event::Keyboard(iced::keyboard::Event::KeyPressed { key_code, .. }) => {
                         match key_code {
                             iced::keyboard::KeyCode::Home => self.set_cur_pos(0),
@@ -217,20 +215,10 @@ impl Application for HexView {
                 Command::none()
             }
             Message::SelectedText(contents) => {
-                let mut last_y = None;
                 let contents = contents
                     .into_iter()
-                    .fold(String::new(), |acc, (y, content)| {
-                        if let Some(_y) = last_y {
-                            let new_line = if y == _y { "" } else { "\n" };
-                            last_y = Some(y);
-
-                            format!("{acc}{new_line}{content}")
-                        } else {
-                            last_y = Some(y);
-
-                            content
-                        }
+                    .fold(String::new(), |acc, (_, content)| {
+                        format!("{}{}\n", acc, content)
                     });
 
                 if !contents.is_empty() {
@@ -247,7 +235,7 @@ impl Application for HexView {
 
     fn view(&self) -> Element<Message> {
         let content = {
-            let file_name_text = text(self.file.path.clone()).size(20);
+            let file_name_text = text(self.file.path.clone()).font(Font::with_name("Consolas"));
 
             let hex_rows: Vec<HexRow> = self.get_cur_hex_rows();
 
@@ -255,9 +243,10 @@ impl Application for HexView {
             let mut hex_col_vec: Vec<Element<Message>> = Vec::new();
             let mut ascii_col_vec: Vec<Element<Message>> = Vec::new();
 
-            for row in hex_rows.iter() {
+            for (r, row) in hex_rows.iter().enumerate() {
                 let mut offset_text_elems: Vec<Element<Message>> = Vec::new();
-                let mut i = 8;
+                let num_digits = 8; // 8 of those boys
+                let mut i = num_digits;
                 let mut leading = true;
 
                 while i > 0 {
@@ -275,7 +264,7 @@ impl Application for HexView {
                             .font(Font::with_name("Consolas"))
                             .style(style);
 
-                    if i > 0 && (i % 4) == 0 {
+                    if i < num_digits && (i % 4) == 0 {
                         offset_text_elems.push(Element::from(Space::with_width(5)));
                     }
                     offset_text_elems.push(Element::from(offset_digit_text));
@@ -290,7 +279,9 @@ impl Application for HexView {
                         _ => theme::Text::Default,
                     };
 
-                    let text_element = selectable_text(format!("{:02X?}", byte))
+                    let grid_pos: usize = r * self.bytes_per_row + i;
+
+                    let text_element = byte_text(format!("{:02X?}", byte), grid_pos as u32)
                         .font(Font::with_name("Consolas"))
                         .style(style);
 
@@ -312,13 +303,15 @@ impl Application for HexView {
                         _ => '·',
                     };
 
+                    let grid_pos: usize = r * self.bytes_per_row + i;
+
                     let style = match *byte {
                         0 => theme::Text::Faintest,
                         32..=126 => theme::Text::Default,
                         _ => theme::Text::Fainter,
                     };
 
-                    let text_element = selectable_text(ascii_char)
+                    let text_element = byte_text(ascii_char, grid_pos as u32)
                         .font(Font::with_name("Consolas"))
                         .style(style);
                     ascii_text_elems.push(Element::from(text_element));
@@ -341,10 +334,15 @@ impl Application for HexView {
                 .push(Space::with_width(10))
                 .push(ascii_col);
 
-            let ui_rows: Vec<Element<Message>> =
-                vec![Element::from(file_name_text), Element::from(data_row)];
+            let f32_display = text(format!("{:}", 5.0)).font(Font::with_name("Consolas"));
 
-            let hex_table = Column::with_children(ui_rows);
+            let ui_rows: Vec<Element<Message>> = vec![
+                Element::from(file_name_text),
+                Element::from(data_row),
+                Element::from(f32_display),
+            ];
+
+            let hex_table = Column::with_children(ui_rows).padding(10);
 
             hex_table.max_width(700)
         };

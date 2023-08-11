@@ -3,7 +3,7 @@ use iced::{application, overlay, Background, Color};
 use theme_data::Colors;
 
 use crate::theme_data;
-use crate::widget::selectable_text;
+use crate::widget::byte_text;
 
 // TODO: If we use non-standard font sizes, we should consider
 // Config.font.size since it's user configurable
@@ -542,14 +542,14 @@ impl text_input::StyleSheet for Theme {
     }
 }
 
-impl selectable_text::StyleSheet for Theme {
+impl byte_text::StyleSheet for Theme {
     type Style = Text;
 
-    fn appearance(&self, style: &Self::Style) -> selectable_text::Appearance {
+    fn appearance(&self, style: &Self::Style) -> byte_text::Appearance {
         let color = <Theme as text::StyleSheet>::appearance(self, style.clone()).color;
         let selection_color = self.colors().accent.high_alpha;
 
-        selectable_text::Appearance {
+        byte_text::Appearance {
             color,
             selection_color,
         }
