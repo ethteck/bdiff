@@ -65,12 +65,6 @@ fn read_file(path: &Path) -> std::result::Result<BinFile, Error> {
         .read_to_end(&mut buffer)
         .or(result::Result::Err(Error::IOError));
 
-    println!(
-        "Read {} bytes from {}",
-        buffer.len(),
-        path.file_name().unwrap().to_str().unwrap()
-    );
-
     Ok(BinFile {
         path: path.to_str().unwrap().to_string(),
         data: buffer,
@@ -78,12 +72,19 @@ fn read_file(path: &Path) -> std::result::Result<BinFile, Error> {
 }
 
 #[derive(Debug, Default)]
+struct HVSelection {
+    start: u32,
+    len: u32,
+}
+
+#[derive(Debug, Default)]
 struct HexView {
     file: BinFile,
-    cur_pos: usize,
     num_rows: u32,
     bytes_per_row: usize,
     theme: Theme,
+    cur_pos: usize,
+    selection: HVSelection,
 }
 impl HexView {
     fn set_cur_pos(&mut self, val: usize) {
@@ -146,10 +147,11 @@ impl Application for HexView {
                     path: String::from("Loading"),
                     data: vec![],
                 },
-                cur_pos: 0,
                 num_rows: 30,
                 bytes_per_row: 0x10,
                 theme: Theme::default(),
+                cur_pos: 0,
+                selection: HVSelection { start: 0, len: 0 },
             },
             Command::perform(async { read_file_result }, Message::FileLoaded),
         )
@@ -164,10 +166,11 @@ impl Application for HexView {
             Message::FileLoaded(Ok(bin_file)) => {
                 *self = HexView {
                     file: bin_file,
-                    cur_pos: 0,
                     num_rows: 30,
                     bytes_per_row: 0x10,
                     theme: Theme::default(),
+                    selection: HVSelection { start: 0, len: 0 },
+                    cur_pos: 0,
                 };
                 Command::none()
             }

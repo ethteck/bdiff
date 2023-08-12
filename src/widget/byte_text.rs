@@ -255,21 +255,6 @@ where
         );
     }
 
-    fn mouse_interaction(
-        &self,
-        _state: &Tree,
-        layout: Layout<'_>,
-        cursor: mouse::Cursor,
-        _viewport: &Rectangle,
-        _renderer: &Renderer,
-    ) -> mouse::Interaction {
-        if cursor.position_over(layout.bounds()).is_some() {
-            mouse::Interaction::Text
-        } else {
-            mouse::Interaction::default()
-        }
-    }
-
     fn operate(
         &self,
         tree: &mut Tree,

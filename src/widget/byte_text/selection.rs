@@ -40,6 +40,7 @@ impl Raw {
             }
 
             ((start.x - end.x).abs() > 1.0).then_some(Resolved { start, end })
+            //Some(Resolved { start, end })
         } else {
             None
         }
@@ -79,7 +80,7 @@ where
     let end: usize =
         find_cursor_position(renderer, font, size, line_height, bounds, value, end_pos)?;
 
-    (start != end).then(|| Selection {
+    Some(Selection {
         start: start.min(end),
         end: start.max(end),
     })
