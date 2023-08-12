@@ -2,6 +2,7 @@ pub use self::byte_text::byte_text;
 use crate::Theme;
 
 pub mod byte_text;
+pub mod clip_viewport;
 
 pub type Renderer = iced::Renderer<Theme>;
 pub type Element<'a, Message> = iced::Element<'a, Message, Renderer>;

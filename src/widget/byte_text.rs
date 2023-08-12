@@ -11,15 +11,19 @@ pub use self::text::{LineHeight, Shaping};
 
 mod selection;
 
-pub fn byte_text<'a, Renderer>(content: impl ToString, grid_pos: u32) -> Text<'a, Renderer>
+pub fn byte_text<'a, Message, Renderer>(
+    content: impl ToString,
+    grid_pos: u32,
+    on_selected: impl Fn(u32) -> Message + 'static,
+) -> Text<'a, Message, Renderer>
 where
     Renderer: text::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    Text::new(content.to_string(), grid_pos)
+    Text::new(content.to_string(), grid_pos, on_selected)
 }
 
-pub struct Text<'a, Renderer>
+pub struct Text<'a, Message, Renderer>
 where
     Renderer: text::Renderer,
     Renderer::Theme: StyleSheet,
@@ -35,14 +39,19 @@ where
     shaping: Shaping,
     style: <Renderer::Theme as StyleSheet>::Style,
     grid_pos: u32,
+    on_selected: Box<dyn Fn(u32) -> Message>,
 }
 
-impl<'a, Renderer> Text<'a, Renderer>
+impl<'a, Message, Renderer> Text<'a, Message, Renderer>
 where
     Renderer: text::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    pub fn new(content: impl Into<Cow<'a, str>>, grid_pos: u32) -> Self {
+    pub fn new(
+        content: impl Into<Cow<'a, str>>,
+        grid_pos: u32,
+        on_selected: impl Fn(u32) -> Message + 'static,
+    ) -> Self {
         Text {
             content: content.into(),
             size: None,
@@ -58,6 +67,7 @@ where
             shaping: Shaping::Advanced,
             style: Default::default(),
             grid_pos,
+            on_selected: Box::new(on_selected),
         }
     }
 
@@ -107,7 +117,7 @@ where
     }
 }
 
-impl<'a, Message, Renderer> Widget<Message, Renderer> for Text<'a, Renderer>
+impl<'a, Message, Renderer> Widget<Message, Renderer> for Text<'a, Message, Renderer>
 where
     Renderer: text::Renderer,
     Renderer::Theme: StyleSheet,
@@ -170,6 +180,8 @@ where
                         start: cursor,
                         end: cursor,
                     });
+
+                    //shell.publish((self.on_selected)(self.grid_pos));
                 } else {
                     *state = State::Idle;
                 }
@@ -327,12 +339,13 @@ fn draw<Renderer>(
     });
 }
 
-impl<'a, Message, Renderer> From<Text<'a, Renderer>> for Element<'a, Message, Renderer>
+impl<'a, Message, Renderer> From<Text<'a, Message, Renderer>> for Element<'a, Message, Renderer>
 where
     Renderer: text::Renderer + 'a,
     Renderer::Theme: StyleSheet,
+    Message: 'a + Clone,
 {
-    fn from(text: Text<'a, Renderer>) -> Element<'a, Message, Renderer> {
+    fn from(text: Text<'a, Message, Renderer>) -> Element<'a, Message, Renderer> {
         Element::new(text)
     }
 }

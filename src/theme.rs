@@ -3,7 +3,7 @@ use iced::{application, overlay, Background, Color};
 use theme_data::Colors;
 
 use crate::theme_data;
-use crate::widget::byte_text;
+use crate::widget::{byte_text, clip_viewport};
 
 // TODO: If we use non-standard font sizes, we should consider
 // Config.font.size since it's user configurable
@@ -553,6 +553,14 @@ impl byte_text::StyleSheet for Theme {
             color,
             selection_color,
         }
+    }
+}
+
+impl clip_viewport::StyleSheet for Theme {
+    type Style = Container;
+
+    fn appearance(&self, style: &Self::Style) -> clip_viewport::Appearance {
+        clip_viewport::Appearance {}
     }
 }
 

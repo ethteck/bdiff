@@ -1,4 +1,4 @@
 #[derive(Debug, Clone)]
-pub(crate) enum Error {
+pub enum Error {
     IOError,
 }
