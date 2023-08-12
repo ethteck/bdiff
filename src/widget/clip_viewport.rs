@@ -27,14 +27,13 @@ impl From<Id> for iced_core::widget::Id {
         id.0
     }
 }
+
 pub struct ClipViewport<'a, Message, Renderer>
 where
     Renderer: iced_core::Renderer,
     Renderer::Theme: StyleSheet,
 {
     id: Option<Id>,
-    width: Length,
-    height: Length,
     style: <Renderer::Theme as StyleSheet>::Style,
     content: Element<'a, Message, Renderer>,
 }
@@ -48,8 +47,6 @@ where
     pub fn new(content: impl Into<Element<'a, Message, Renderer>>) -> Self {
         ClipViewport {
             id: None,
-            width: Length::Shrink,
-            height: Length::Shrink,
             style: Default::default(),
             content: content.into(),
         }
@@ -58,18 +55,6 @@ where
     /// Sets the [`Id`] of the [`ClipViewport`].
     pub fn id(mut self, id: Id) -> Self {
         self.id = Some(id);
-        self
-    }
-
-    /// Sets the width of the [`ClipViewport`].
-    pub fn width(mut self, width: impl Into<Length>) -> Self {
-        self.width = width.into();
-        self
-    }
-
-    /// Sets the height of the [`ClipViewport`].
-    pub fn height(mut self, height: impl Into<Length>) -> Self {
-        self.height = height.into();
         self
     }
 
@@ -120,19 +105,19 @@ where
     }
 
     fn width(&self) -> Length {
-        self.width
+        self.content.as_widget().width()
     }
 
     fn height(&self) -> Length {
-        self.height
+        self.content.as_widget().height()
     }
 
     fn layout(&self, renderer: &Renderer, limits: &layout::Limits) -> layout::Node {
         layout(
             renderer,
             limits,
-            self.width,
-            self.height,
+            self.width(),
+            self.height(),
             |renderer, limits| self.content.as_widget().layout(renderer, limits),
         )
     }
@@ -144,11 +129,7 @@ where
         renderer: &Renderer,
         operation: &mut dyn Operation<Message>,
     ) {
-        let state = tree.state.downcast_mut::<State>();
-
         let bounds = layout.bounds();
-        let content_layout = layout.children().next().unwrap();
-        let content_bounds = content_layout.bounds();
 
         operation.container(self.id.as_ref().map(|id| &id.0), bounds, &mut |operation| {
             self.content.as_widget().operate(
@@ -172,7 +153,6 @@ where
         _viewport: &Rectangle,
     ) -> event::Status {
         update(
-            tree.state.downcast_mut::<State>(),
             event,
             layout,
             cursor,
@@ -203,24 +183,21 @@ where
         cursor: mouse::Cursor,
         _viewport: &Rectangle,
     ) {
-        draw(
-            tree.state.downcast_ref::<State>(),
-            renderer,
-            theme,
-            layout,
-            cursor,
-            |renderer, layout, cursor, viewport| {
-                self.content.as_widget().draw(
-                    &tree.children[0],
-                    renderer,
-                    theme,
-                    style,
-                    layout,
-                    cursor,
-                    viewport,
-                )
-            },
-        )
+        let thing = |renderer, layout, cursor, viewport: &Rectangle| {
+            self.content.as_widget().draw(
+                &tree.children[0],
+                renderer,
+                theme,
+                style,
+                layout,
+                cursor,
+                viewport,
+            )
+        };
+
+        let content_layout = layout.children().next().unwrap();
+
+        thing(renderer, content_layout, cursor, &layout.bounds());
     }
 
     fn mouse_interaction(
@@ -231,41 +208,16 @@ where
         _viewport: &Rectangle,
         renderer: &Renderer,
     ) -> mouse::Interaction {
-        mouse_interaction(
-            tree.state.downcast_ref::<State>(),
-            layout,
-            cursor,
-            |layout, cursor, viewport| {
-                self.content.as_widget().mouse_interaction(
-                    &tree.children[0],
-                    layout,
-                    cursor,
-                    viewport,
-                    renderer,
-                )
-            },
-        )
+        mouse_interaction(layout, cursor, |layout, cursor, viewport| {
+            self.content.as_widget().mouse_interaction(
+                &tree.children[0],
+                layout,
+                cursor,
+                viewport,
+                renderer,
+            )
+        })
     }
-
-    // fn overlay<'b>(
-    //     &'b mut self,
-    //     tree: &'b mut Tree,
-    //     layout: Layout<'_>,
-    //     renderer: &Renderer,
-    // ) -> Option<overlay::Element<'b, Message, Renderer>> {
-    //     self.content
-    //         .as_widget_mut()
-    //         .overlay(
-    //             &mut tree.children[0],
-    //             layout.children().next().unwrap(),
-    //             renderer,
-    //         )
-    //         .map(|overlay| {
-    //             let bounds = layout.bounds();
-    //             let content_layout = layout.children().next().unwrap();
-    //             let content_bounds = content_layout.bounds();
-    //         })
-    // }
 }
 
 /// Computes the layout of a [`ClipViewport`].
@@ -292,7 +244,6 @@ pub fn layout<Renderer>(
 /// Processes an [`Event`] and updates the [`State`] of a [`ClipViewport`]
 /// accordingly.
 pub fn update<Message>(
-    state: &mut State,
     event: Event,
     layout: Layout<'_>,
     cursor: mouse::Cursor,
@@ -310,29 +261,26 @@ pub fn update<Message>(
     let bounds = layout.bounds();
     let cursor_over_scrollable = cursor.position_over(bounds);
 
-    let content = layout.children().next().unwrap();
-    let content_bounds = content.bounds();
-
-    let event_status = {
-        update_content(
-            event.clone(),
-            content,
-            cursor,
-            clipboard,
-            shell,
-            &Rectangle {
-                y: bounds.y,
-                x: bounds.x,
-                ..bounds
-            },
-        )
+    let cursor = match cursor_over_scrollable {
+        Some(cursor_position) => mouse::Cursor::Available(cursor_position),
+        _ => mouse::Cursor::Unavailable,
     };
+
+    let content = layout.children().next().unwrap();
+
+    update_content(
+        event.clone(),
+        content,
+        cursor,
+        clipboard,
+        shell,
+        &layout.bounds(),
+    );
     event::Status::Ignored
 }
 
 /// Computes the current [`mouse::Interaction`] of a [`ClipViewport`].
 pub fn mouse_interaction(
-    state: &State,
     layout: Layout<'_>,
     cursor: mouse::Cursor,
     content_interaction: impl FnOnce(Layout<'_>, mouse::Cursor, &Rectangle) -> mouse::Interaction,
@@ -341,49 +289,13 @@ pub fn mouse_interaction(
     let cursor_over_scrollable = cursor.position_over(bounds);
 
     let content_layout = layout.children().next().unwrap();
-    let content_bounds = content_layout.bounds();
 
     let cursor = match cursor_over_scrollable {
         Some(cursor_position) => mouse::Cursor::Available(cursor_position),
         _ => mouse::Cursor::Unavailable,
     };
 
-    content_interaction(
-        content_layout,
-        cursor,
-        &Rectangle {
-            y: bounds.y,
-            x: bounds.x,
-            ..bounds
-        },
-    )
-}
-
-/// Draws a [`ClipViewport`].
-pub fn draw<Renderer>(
-    state: &State,
-    renderer: &mut Renderer,
-    theme: &Renderer::Theme,
-    layout: Layout<'_>,
-    cursor: mouse::Cursor,
-    draw_content: impl FnOnce(&mut Renderer, Layout<'_>, mouse::Cursor, &Rectangle),
-) where
-    Renderer: iced_core::Renderer,
-{
-    let bounds = layout.bounds();
-    let content_layout = layout.children().next().unwrap();
-    let content_bounds = content_layout.bounds();
-
-    draw_content(
-        renderer,
-        content_layout,
-        cursor,
-        &Rectangle {
-            x: bounds.x,
-            y: bounds.y,
-            ..bounds
-        },
-    );
+    content_interaction(content_layout, cursor, &bounds)
 }
 
 pub trait StyleSheet {

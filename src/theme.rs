@@ -559,7 +559,7 @@ impl byte_text::StyleSheet for Theme {
 impl clip_viewport::StyleSheet for Theme {
     type Style = Container;
 
-    fn appearance(&self, style: &Self::Style) -> clip_viewport::Appearance {
+    fn appearance(&self, _style: &Self::Style) -> clip_viewport::Appearance {
         clip_viewport::Appearance {}
     }
 }

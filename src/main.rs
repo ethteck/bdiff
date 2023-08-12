@@ -353,7 +353,7 @@ impl Application for HexView {
                 .push(Space::with_width(10))
                 .push(ClipViewport::new(hex_col))
                 .push(Space::with_width(10))
-                .push(ascii_col);
+                .push(ClipViewport::new(ascii_col));
 
             let f32_display = text(format!("{:}", 5.0)).font(Font::with_name("Consolas"));
 
