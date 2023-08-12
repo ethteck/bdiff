@@ -1,4 +1,4 @@
-mod error;
+pub mod error;
 pub mod theme;
 pub mod theme_data;
 pub mod widget;
@@ -15,6 +15,7 @@ use error::Error;
 use iced::widget::text;
 use iced::widget::{container, row};
 use iced::{clipboard, subscription, Application, Command, Event, Font, Settings, Subscription};
+use widget::clip_viewport::ClipViewport;
 use widget::{Column, Renderer, Row, Space};
 
 pub use self::theme::Theme;
@@ -71,6 +72,12 @@ fn read_file(path: &Path) -> std::result::Result<BinFile, Error> {
     })
 }
 
+#[derive(Default, Debug, Clone)]
+pub struct BinFile {
+    path: String,
+    data: Vec<u8>,
+}
+
 #[derive(Debug, Default)]
 struct HVSelection {
     start: u32,
@@ -86,6 +93,7 @@ struct HexView {
     cur_pos: usize,
     selection: HVSelection,
 }
+
 impl HexView {
     fn set_cur_pos(&mut self, val: usize) {
         self.cur_pos = val.min(self.file.data.len())
@@ -120,10 +128,11 @@ impl HexView {
 }
 
 #[derive(Debug, Clone)]
-enum Message {
+pub enum Message {
     FileLoaded(Result<BinFile, Error>),
     EventOccurred(Event),
     SelectedText(Vec<(u32, String)>),
+    SelectionStarted(u32),
 }
 
 struct HexRow {
@@ -229,6 +238,10 @@ impl Application for HexView {
                 }
                 Command::none()
             }
+            Message::SelectionStarted(grid_pos) => {
+                println!("{:} selected", grid_pos);
+                Command::none()
+            }
         }
     }
 
@@ -284,9 +297,13 @@ impl Application for HexView {
 
                     let grid_pos: usize = r * self.bytes_per_row + i;
 
-                    let text_element = byte_text(format!("{:02X?}", byte), grid_pos as u32)
-                        .font(Font::with_name("Consolas"))
-                        .style(style);
+                    let text_element = byte_text(
+                        format!("{:02X?}", byte),
+                        grid_pos as u32,
+                        Message::SelectionStarted,
+                    )
+                    .font(Font::with_name("Consolas"))
+                    .style(style);
 
                     if i > 0 {
                         if (i % 8) == 0 {
@@ -314,9 +331,10 @@ impl Application for HexView {
                         _ => theme::Text::Fainter,
                     };
 
-                    let text_element = byte_text(ascii_char, grid_pos as u32)
-                        .font(Font::with_name("Consolas"))
-                        .style(style);
+                    let text_element =
+                        byte_text(ascii_char, grid_pos as u32, Message::SelectionStarted)
+                            .font(Font::with_name("Consolas"))
+                            .style(style);
                     ascii_text_elems.push(Element::from(text_element));
                 }
                 let ascii_text = Row::with_children(ascii_text_elems);
@@ -333,9 +351,9 @@ impl Application for HexView {
             let data_row = row![]
                 .push(offsets_col)
                 .push(Space::with_width(10))
-                .push(hex_col)
+                .push(ClipViewport::new(hex_col))
                 .push(Space::with_width(10))
-                .push(ascii_col);
+                .push(ClipViewport::new(ascii_col));
 
             let f32_display = text(format!("{:}", 5.0)).font(Font::with_name("Consolas"));
 
@@ -360,10 +378,4 @@ impl Application for HexView {
     fn theme(&self) -> Theme {
         self.theme.clone()
     }
-}
-
-#[derive(Default, Debug, Clone)]
-struct BinFile {
-    path: String,
-    data: Vec<u8>,
 }
