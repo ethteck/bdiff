@@ -6,10 +6,9 @@ use iced::advanced::{layout, mouse, renderer, text, widget, Layout, Widget};
 use iced::widget::text_input::Value;
 use iced::{alignment, event, touch, Color, Command, Element, Length, Pixels, Rectangle, Size};
 
-use self::selection::selection;
-pub use self::text::{LineHeight, Shaping};
+pub mod selection;
 
-mod selection;
+pub use self::text::{LineHeight, Shaping};
 
 pub fn byte_text<'a, Message, Renderer>(
     content: impl ToString,
@@ -229,19 +228,9 @@ where
 
         let state = tree.state.downcast_ref::<State>();
 
-        let value = Value::new(&self.content);
+        let selection = state.selection();
 
-        if let Some(_selection) = state.selection().and_then(|raw| {
-            selection(
-                raw,
-                renderer,
-                self.font,
-                self.size,
-                self.line_height,
-                layout.bounds(),
-                &value,
-            )
-        }) {
+        if selection.is_some() && selection.unwrap().resolve(bounds).is_some() {
             renderer.fill_quad(
                 Quad {
                     bounds: layout.bounds(),
@@ -271,24 +260,17 @@ where
         &self,
         tree: &mut Tree,
         layout: Layout<'_>,
-        renderer: &Renderer,
+        _renderer: &Renderer,
         operation: &mut dyn Operation<Message>,
     ) {
         let state = tree.state.downcast_ref::<State>();
 
         let bounds = layout.bounds();
         let value = Value::new(&self.content);
-        if let Some(_selection) = state.selection().and_then(|raw| {
-            selection(
-                raw,
-                renderer,
-                self.font,
-                self.size,
-                self.line_height,
-                bounds,
-                &value,
-            )
-        }) {
+
+        let selection = state.selection();
+
+        if selection.is_some() && selection.unwrap().resolve(bounds).is_some() {
             let content = value.to_string();
             operation.custom(&mut (self.grid_pos, content), None);
         }

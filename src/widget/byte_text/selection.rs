@@ -1,7 +1,4 @@
-use iced::advanced::text;
 use iced::{Point, Rectangle, Vector};
-
-use super::Value;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Raw {
@@ -51,74 +48,4 @@ impl Raw {
 pub struct Resolved {
     pub start: Point,
     pub end: Point,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Selection {
-    pub start: usize,
-    pub end: usize,
-}
-
-pub fn selection<Renderer>(
-    raw: Raw,
-    renderer: &Renderer,
-    font: Option<Renderer::Font>,
-    size: Option<f32>,
-    line_height: text::LineHeight,
-    bounds: Rectangle,
-    value: &Value,
-) -> Option<Selection>
-where
-    Renderer: text::Renderer,
-{
-    let resolved = raw.resolve(bounds)?;
-
-    let start_pos = relative(resolved.start, bounds);
-    let end_pos = relative(resolved.end, bounds);
-
-    let start = find_cursor_position(renderer, font, size, line_height, bounds, value, start_pos)?;
-    let end: usize =
-        find_cursor_position(renderer, font, size, line_height, bounds, value, end_pos)?;
-
-    Some(Selection {
-        start: start.min(end),
-        end: start.max(end),
-    })
-}
-
-fn find_cursor_position<Renderer>(
-    renderer: &Renderer,
-    font: Option<Renderer::Font>,
-    size: Option<f32>,
-    line_height: text::LineHeight,
-    bounds: Rectangle,
-    value: &Value,
-    cursor_position: Point,
-) -> Option<usize>
-where
-    Renderer: text::Renderer,
-{
-    let font = font.unwrap_or_else(|| renderer.default_font());
-    let size = size.unwrap_or_else(|| renderer.default_size());
-
-    let value = value.to_string();
-
-    let char_offset = renderer
-        .hit_test(
-            &value,
-            size,
-            line_height,
-            font,
-            bounds.size(),
-            text::Shaping::Advanced,
-            cursor_position,
-            true,
-        )
-        .map(text::Hit::cursor)?;
-
-    Some(char_offset)
-}
-
-fn relative(point: Point, bounds: Rectangle) -> Point {
-    point - Vector::new(bounds.x, bounds.y)
 }
