@@ -15,6 +15,7 @@ use error::Error;
 use iced::widget::text;
 use iced::widget::{container, row};
 use iced::{clipboard, subscription, Application, Command, Event, Font, Settings, Subscription};
+use iced_core::mouse::Button;
 use widget::clip_viewport::ClipViewport;
 use widget::{Column, Renderer, Row, Space};
 
@@ -80,8 +81,18 @@ pub struct BinFile {
 
 #[derive(Debug, Default)]
 struct HVSelection {
-    start: u32,
-    len: u32,
+    start: usize,
+    end: usize,
+    selecting: bool,
+}
+
+impl HVSelection {
+    fn contains(&self, grid_pos: usize) -> bool {
+        let low = self.start.min(self.end);
+        let high = self.end.max(self.start);
+
+        grid_pos >= low && grid_pos <= high
+    }
 }
 
 #[derive(Debug, Default)]
@@ -132,7 +143,7 @@ pub enum Message {
     FileLoaded(Result<BinFile, Error>),
     EventOccurred(Event),
     SelectedText(Vec<(u32, String)>),
-    SelectionStarted(u32),
+    SelectionAdded(u32),
 }
 
 struct HexRow {
@@ -160,7 +171,7 @@ impl Application for HexView {
                 bytes_per_row: 0x10,
                 theme: Theme::default(),
                 cur_pos: 0,
-                selection: HVSelection { start: 0, len: 0 },
+                selection: HVSelection::default(),
             },
             Command::perform(async { read_file_result }, Message::FileLoaded),
         )
@@ -178,7 +189,7 @@ impl Application for HexView {
                     num_rows: 30,
                     bytes_per_row: 0x10,
                     theme: Theme::default(),
-                    selection: HVSelection { start: 0, len: 0 },
+                    selection: HVSelection::default(),
                     cur_pos: 0,
                 };
                 Command::none()
@@ -191,10 +202,9 @@ impl Application for HexView {
                     }) => {
                         self.adjust_cur_pos(-(y as i32) * self.bytes_per_row as i32);
                     }
-                    iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
-                        key_code: iced::keyboard::KeyCode::C,
-                        modifiers,
-                    }) if modifiers.command() => return byte_text::selected(Message::SelectedText),
+                    Event::Mouse(iced::mouse::Event::ButtonReleased(Button::Left)) => {
+                        self.selection.selecting = false;
+                    }
                     Event::Keyboard(iced::keyboard::Event::KeyPressed { key_code, .. }) => {
                         match key_code {
                             iced::keyboard::KeyCode::Home => self.set_cur_pos(0),
@@ -238,8 +248,19 @@ impl Application for HexView {
                 }
                 Command::none()
             }
-            Message::SelectionStarted(grid_pos) => {
-                println!("{:} selected", grid_pos);
+            Message::SelectionAdded(grid_pos) => {
+                let gp = self.cur_pos + grid_pos as usize;
+
+                match self.selection.selecting {
+                    true => {
+                        self.selection.end = gp;
+                    }
+                    false => {
+                        self.selection.selecting = true;
+                        self.selection.start = gp;
+                        self.selection.end = gp;
+                    }
+                }
                 Command::none()
             }
         }
@@ -300,7 +321,8 @@ impl Application for HexView {
                     let text_element = byte_text(
                         format!("{:02X?}", byte),
                         grid_pos as u32,
-                        Message::SelectionStarted,
+                        self.selection.contains(self.cur_pos + grid_pos),
+                        Message::SelectionAdded,
                     )
                     .font(Font::with_name("Consolas"))
                     .style(style);
@@ -317,7 +339,7 @@ impl Application for HexView {
                 let hex_text = Row::with_children(hex_text_elems);
 
                 let mut ascii_text_elems: Vec<Element<Message>> = Vec::new();
-                for byte in &row.data {
+                for (i, byte) in row.data.iter().enumerate() {
                     let ascii_char: char = match *byte {
                         32..=126 => *byte as char,
                         _ => '·',
@@ -331,10 +353,14 @@ impl Application for HexView {
                         _ => theme::Text::Fainter,
                     };
 
-                    let text_element =
-                        byte_text(ascii_char, grid_pos as u32, Message::SelectionStarted)
-                            .font(Font::with_name("Consolas"))
-                            .style(style);
+                    let text_element = byte_text(
+                        ascii_char,
+                        grid_pos as u32,
+                        self.selection.contains(self.cur_pos + grid_pos),
+                        Message::SelectionAdded,
+                    )
+                    .font(Font::with_name("Consolas"))
+                    .style(style);
                     ascii_text_elems.push(Element::from(text_element));
                 }
                 let ascii_text = Row::with_children(ascii_text_elems);

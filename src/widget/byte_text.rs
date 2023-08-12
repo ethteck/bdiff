@@ -1,25 +1,23 @@
 use std::borrow::Cow;
 
 use iced::advanced::renderer::Quad;
-use iced::advanced::widget::{operation, tree, Operation, Tree};
-use iced::advanced::{layout, mouse, renderer, text, widget, Layout, Widget};
-use iced::widget::text_input::Value;
-use iced::{alignment, event, touch, Color, Command, Element, Length, Pixels, Rectangle, Size};
-
-pub mod selection;
+use iced::advanced::widget::{tree, Tree};
+use iced::advanced::{layout, mouse, renderer, text, Layout, Widget};
+use iced::{alignment, event, touch, Color, Element, Length, Pixels, Rectangle, Size};
 
 pub use self::text::{LineHeight, Shaping};
 
 pub fn byte_text<'a, Message, Renderer>(
     content: impl ToString,
     grid_pos: u32,
+    selected: bool,
     on_selected: impl Fn(u32) -> Message + 'static,
 ) -> Text<'a, Message, Renderer>
 where
     Renderer: text::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    Text::new(content.to_string(), grid_pos, on_selected)
+    Text::new(content.to_string(), grid_pos, selected, on_selected)
 }
 
 pub struct Text<'a, Message, Renderer>
@@ -38,6 +36,7 @@ where
     shaping: Shaping,
     style: <Renderer::Theme as StyleSheet>::Style,
     grid_pos: u32,
+    selected: bool,
     on_selected: Box<dyn Fn(u32) -> Message>,
 }
 
@@ -49,6 +48,7 @@ where
     pub fn new(
         content: impl Into<Cow<'a, str>>,
         grid_pos: u32,
+        selected: bool,
         on_selected: impl Fn(u32) -> Message + 'static,
     ) -> Self {
         Text {
@@ -66,6 +66,7 @@ where
             shaping: Shaping::Advanced,
             style: Default::default(),
             grid_pos,
+            selected,
             on_selected: Box::new(on_selected),
         }
     }
@@ -162,11 +163,11 @@ where
         &mut self,
         tree: &mut Tree,
         event: iced::Event,
-        _layout: Layout<'_>,
+        layout: Layout<'_>,
         cursor: mouse::Cursor,
         _renderer: &Renderer,
         _clipboard: &mut dyn iced::advanced::Clipboard,
-        _shell: &mut iced::advanced::Shell<'_, Message>,
+        shell: &mut iced::advanced::Shell<'_, Message>,
         _viewport: &Rectangle,
     ) -> event::Status {
         let state = tree.state.downcast_mut::<State>();
@@ -175,12 +176,11 @@ where
             iced::Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left))
             | iced::Event::Touch(touch::Event::FingerPressed { .. }) => {
                 if let Some(cursor) = cursor.position() {
-                    *state = State::Selecting(selection::Raw {
-                        start: cursor,
-                        end: cursor,
-                    });
+                    *state = State::Selecting;
 
-                    //shell.publish((self.on_selected)(self.grid_pos));
+                    if layout.bounds().contains(cursor) {
+                        shell.publish((self.on_selected)(self.grid_pos));
+                    }
                 } else {
                     *state = State::Idle;
                 }
@@ -188,8 +188,8 @@ where
             iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
             | iced::Event::Touch(touch::Event::FingerLifted { .. })
             | iced::Event::Touch(touch::Event::FingerLost { .. }) => {
-                if let State::Selecting(raw) = *state {
-                    *state = State::Selected(raw);
+                if let State::Selecting = *state {
+                    *state = State::Selected;
                 } else {
                     *state = State::Idle;
                 }
@@ -197,8 +197,10 @@ where
             iced::Event::Mouse(mouse::Event::CursorMoved { .. })
             | iced::Event::Touch(touch::Event::FingerMoved { .. }) => {
                 if let Some(cursor) = cursor.position() {
-                    if let State::Selecting(raw) = state {
-                        raw.end = cursor;
+                    if let State::Selecting = state {
+                        if layout.bounds().contains(cursor) {
+                            shell.publish((self.on_selected)(self.grid_pos));
+                        }
                     }
                 }
             }
@@ -210,7 +212,7 @@ where
 
     fn draw(
         &self,
-        tree: &Tree,
+        _tree: &Tree,
         renderer: &mut Renderer,
         theme: &Renderer::Theme,
         style: &renderer::Style,
@@ -226,11 +228,7 @@ where
 
         let appearance = theme.appearance(&self.style);
 
-        let state = tree.state.downcast_ref::<State>();
-
-        let selection = state.selection();
-
-        if selection.is_some() && selection.unwrap().resolve(bounds).is_some() {
+        if self.selected {
             renderer.fill_quad(
                 Quad {
                     bounds: layout.bounds(),
@@ -254,26 +252,6 @@ where
             self.vertical_alignment,
             self.shaping,
         );
-    }
-
-    fn operate(
-        &self,
-        tree: &mut Tree,
-        layout: Layout<'_>,
-        _renderer: &Renderer,
-        operation: &mut dyn Operation<Message>,
-    ) {
-        let state = tree.state.downcast_ref::<State>();
-
-        let bounds = layout.bounds();
-        let value = Value::new(&self.content);
-
-        let selection = state.selection();
-
-        if selection.is_some() && selection.unwrap().resolve(bounds).is_some() {
-            let content = value.to_string();
-            operation.custom(&mut (self.grid_pos, content), None);
-        }
     }
 }
 
@@ -336,50 +314,8 @@ where
 enum State {
     #[default]
     Idle,
-    Selecting(selection::Raw),
-    Selected(selection::Raw),
-}
-
-impl State {
-    fn selection(self) -> Option<selection::Raw> {
-        match &self {
-            State::Idle => None,
-            State::Selecting(raw) | State::Selected(raw) => Some(*raw),
-        }
-    }
-}
-
-pub fn selected<Message: 'static>(f: fn(Vec<(u32, String)>) -> Message) -> Command<Message> {
-    struct Selected<T> {
-        contents: Vec<(u32, String)>,
-        f: fn(Vec<(u32, String)>) -> T,
-    }
-
-    impl<T> Operation<T> for Selected<T> {
-        fn container(
-            &mut self,
-            _id: Option<&widget::Id>,
-            _bounds: Rectangle,
-            operate_on_children: &mut dyn FnMut(&mut dyn Operation<T>),
-        ) {
-            operate_on_children(self)
-        }
-
-        fn custom(&mut self, state: &mut dyn std::any::Any, _id: Option<&widget::Id>) {
-            if let Some(content) = state.downcast_ref::<(u32, String)>() {
-                self.contents.push(content.clone());
-            }
-        }
-
-        fn finish(&self) -> operation::Outcome<T> {
-            operation::Outcome::Some((self.f)(self.contents.clone()))
-        }
-    }
-
-    Command::widget(Selected {
-        contents: vec![],
-        f,
-    })
+    Selecting,
+    Selected,
 }
 
 pub trait StyleSheet {
