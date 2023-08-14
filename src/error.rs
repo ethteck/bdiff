@@ -1,4 +1,4 @@
 #[derive(Debug, Clone)]
-pub enum Error {
+pub enum BDiffError {
     IOError,
 }

@@ -1,6 +1,7 @@
 pub mod error;
 pub mod theme;
 pub mod theme_data;
+mod watcher;
 pub mod widget;
 mod window;
 
@@ -11,7 +12,7 @@ use std::result;
 
 use argh::FromArgs;
 
-use error::Error;
+use error::BDiffError;
 use iced::widget::text;
 use iced::widget::{container, row};
 use iced::{clipboard, subscription, Application, Command, Event, Font, Settings, Subscription};
@@ -56,10 +57,10 @@ fn main() -> iced::Result {
     })
 }
 
-fn read_file(path: &Path) -> std::result::Result<BinFile, Error> {
-    let file = match File::open(path) {
+fn read_file(path: PathBuf) -> std::result::Result<BinFile, BDiffError> {
+    let file = match File::open(path.clone()) {
         Ok(file) => file,
-        Err(_error) => return result::Result::Err(Error::IOError),
+        Err(_error) => return result::Result::Err(BDiffError::IOError),
     };
 
     let mut buf_reader = BufReader::new(file);
@@ -67,7 +68,7 @@ fn read_file(path: &Path) -> std::result::Result<BinFile, Error> {
 
     let _ = buf_reader
         .read_to_end(&mut buffer)
-        .or(result::Result::Err(Error::IOError));
+        .or(result::Result::Err(BDiffError::IOError));
 
     Ok(BinFile {
         path: path.to_str().unwrap().to_string(),
@@ -108,9 +109,15 @@ impl HVSelection {
     fn contains(&self, grid_pos: usize) -> bool {
         self.state != SelectionState::None && grid_pos >= self.start() && grid_pos <= self.end()
     }
+
+    fn clear(&mut self) {
+        self.first = 0;
+        self.second = 0;
+        self.state = SelectionState::None;
+    }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 struct HexView {
     file: BinFile,
     num_rows: u32,
@@ -139,7 +146,7 @@ impl HexView {
 
         let mut hex_rows = Vec::new();
         let mut i = 0;
-        while i < self.num_rows && row_start + self.bytes_per_row < self.file.data.len() {
+        while i < self.num_rows && row_start < self.file.data.len() {
             let row_end = (row_start + self.bytes_per_row).min(self.file.data.len());
 
             hex_rows.push(HexRow {
@@ -164,7 +171,9 @@ impl HexView {
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    FileLoaded(Result<BinFile, Error>),
+    FileLoaded(std::result::Result<BinFile, BDiffError>),
+    FileReloaded(std::result::Result<BinFile, BDiffError>),
+    WatchedFileChanged(notify::Event),
     EventOccurred(Event),
     CopySelection(Vec<(u32, String)>),
     SelectionAdded(u32),
@@ -183,21 +192,10 @@ impl Application for HexView {
 
     fn new(_flags: Flags) -> (HexView, Command<Message>) {
         let path = _flags.file_path;
-        let read_file_result = read_file(&path);
 
         (
-            HexView {
-                file: BinFile {
-                    path: String::from("Loading"),
-                    data: vec![],
-                },
-                num_rows: 30,
-                bytes_per_row: 0x10,
-                theme: Theme::default(),
-                cur_pos: 0,
-                selection: HVSelection::default(),
-            },
-            Command::perform(async { read_file_result }, Message::FileLoaded),
+            HexView::default(),
+            Command::perform(async { read_file(path) }, Message::FileLoaded),
         )
     }
 
@@ -218,7 +216,17 @@ impl Application for HexView {
                 };
                 Command::none()
             }
+            Message::FileReloaded(Ok(bin_file)) => {
+                self.file = bin_file;
+                if self.selection.start() > self.file.data.len()
+                    || self.selection.end() > self.file.data.len()
+                {
+                    self.selection.clear();
+                }
+                Command::none()
+            }
             Message::FileLoaded(Err(_error)) => Command::none(),
+            Message::FileReloaded(Err(_error)) => Command::none(),
             Message::EventOccurred(event) => {
                 match event {
                     Event::Mouse(iced::mouse::Event::WheelScrolled {
@@ -236,7 +244,7 @@ impl Application for HexView {
                         }
                     }
                     Event::Mouse(iced::mouse::Event::ButtonReleased(Button::Middle)) => {
-                        self.selection.state = SelectionState::None;
+                        self.selection.clear();
                     }
                     Event::Keyboard(iced::keyboard::Event::KeyPressed { key_code, .. }) => {
                         match key_code {
@@ -297,11 +305,19 @@ impl Application for HexView {
                 }
                 Command::none()
             }
+            Message::WatchedFileChanged(event) => {
+                let pbuf = event.paths[0].clone();
+
+                Command::perform(async { read_file(pbuf) }, Message::FileReloaded)
+            }
         }
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        subscription::events().map(Message::EventOccurred)
+        let events_sub = subscription::events().map(Message::EventOccurred);
+        let file_change_sub = watcher::subscription(self.file.path.clone());
+
+        Subscription::batch(vec![events_sub, file_change_sub])
     }
 
     fn view(&self) -> Element<Message> {
@@ -499,15 +515,14 @@ impl Application for HexView {
                     _ => (),
                 }
 
+                // Strings
                 if selection_len > 0 {
-                    // UTF-8
                     if let Ok(string) = String::from_utf8(selected_bytes.clone()) {
                         ui_rows.push(Element::from(
                             text(format!("UTF-8: {:}", string)).font(Font::with_name("Meiryo")),
                         ));
                     }
 
-                    // UTF-16
                     if let Some(string) = UTF_16BE
                         .decode_without_bom_handling_and_without_replacement(&selected_bytes)
                     {
@@ -516,7 +531,6 @@ impl Application for HexView {
                         ));
                     }
 
-                    // EUC-JP
                     if let Some(string) =
                         EUC_JP.decode_without_bom_handling_and_without_replacement(&selected_bytes)
                     {
@@ -525,7 +539,6 @@ impl Application for HexView {
                         ));
                     }
 
-                    //Shift_JIS
                     if let Some(string) = SHIFT_JIS
                         .decode_without_bom_handling_and_without_replacement(&selected_bytes)
                     {

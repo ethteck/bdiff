@@ -10,4 +10,5 @@ argh = "0.1.10"
 encoding_rs = "0.8.32"
 iced = { version = "0.10.0", features = ["image", "advanced"] }
 iced_core = "0.10.0"
+notify = "6.0.1"
 palette = "0.7.2"
