@@ -24,6 +24,8 @@ use self::widget::Element;
 
 use crate::widget::byte_text;
 
+use encoding_rs::*;
+
 #[derive(FromArgs)]
 /// binary differ
 struct Args {
@@ -437,15 +439,12 @@ impl Application for HexView {
 
                         let signed = i8::from_be_bytes(bytes);
                         if signed >= 0 {
-                            let signed_display = text(format!("s8/u8: {:}", signed));
-                            ui_rows.push(Element::from(signed_display));
+                            ui_rows.push(Element::from(text(format!("s8/u8: {:}", signed))));
                         } else {
-                            let signed_display = text(format!("s8: {:}", signed));
-                            ui_rows.push(Element::from(signed_display));
+                            ui_rows.push(Element::from(text(format!("s8: {:}", signed))));
 
                             let unsigned = u8::from_be_bytes(bytes);
-                            let unsigned_display = text(format!("u8: {:}", unsigned));
-                            ui_rows.push(Element::from(unsigned_display));
+                            ui_rows.push(Element::from(text(format!("u8: {:}", unsigned))));
                         }
                     }
                     2 => {
@@ -453,15 +452,12 @@ impl Application for HexView {
 
                         let signed = i16::from_be_bytes(bytes);
                         if signed >= 0 {
-                            let signed_display = text(format!("s16/u16: {:}", signed));
-                            ui_rows.push(Element::from(signed_display));
+                            ui_rows.push(Element::from(text(format!("s16/u16: {:}", signed))));
                         } else {
-                            let signed_display = text(format!("s16: {:}", signed));
-                            ui_rows.push(Element::from(signed_display));
+                            ui_rows.push(Element::from(text(format!("s16: {:}", signed))));
 
                             let unsigned = u16::from_be_bytes(bytes);
-                            let unsigned_display = text(format!("u16: {:}", unsigned));
-                            ui_rows.push(Element::from(unsigned_display));
+                            ui_rows.push(Element::from(text(format!("u16: {:}", unsigned))));
                         }
                     }
                     4 => {
@@ -469,40 +465,74 @@ impl Application for HexView {
 
                         let signed = i32::from_be_bytes(bytes);
                         if signed >= 0 {
-                            let signed_display = text(format!("s32/u32: {:}", signed));
-                            ui_rows.push(Element::from(signed_display));
+                            ui_rows.push(Element::from(text(format!("s32/u32: {:}", signed))));
                         } else {
-                            let signed_display = text(format!("s32: {:}", signed));
-                            ui_rows.push(Element::from(signed_display));
+                            ui_rows.push(Element::from(text(format!("s32: {:}", signed))));
 
                             let unsigned = u32::from_be_bytes(bytes);
-                            let unsigned_display = text(format!("u32: {:}", unsigned));
-                            ui_rows.push(Element::from(unsigned_display));
+                            ui_rows.push(Element::from(text(format!("u32: {:}", unsigned))));
                         }
 
-                        let f32_display = text(format!("f32: {:.}", f32::from_be_bytes(bytes)));
-                        ui_rows.push(Element::from(f32_display));
+                        ui_rows.push(Element::from(text(format!(
+                            "f32: {:.}",
+                            f32::from_be_bytes(bytes)
+                        ))));
                     }
                     8 => {
                         let bytes: [u8; 8] = selected_bytes[0..8].try_into().unwrap_or_default();
 
                         let signed = i64::from_be_bytes(bytes);
                         if signed >= 0 {
-                            let signed_display = text(format!("s64/u64: {:}", signed));
-                            ui_rows.push(Element::from(signed_display));
+                            ui_rows.push(Element::from(text(format!("s64/u64: {:}", signed))));
                         } else {
-                            let signed_display = text(format!("s64: {:}", signed));
-                            ui_rows.push(Element::from(signed_display));
+                            ui_rows.push(Element::from(text(format!("s64: {:}", signed))));
 
                             let unsigned = u64::from_be_bytes(bytes);
-                            let unsigned_display = text(format!("u64: {:}", unsigned));
-                            ui_rows.push(Element::from(unsigned_display));
+                            ui_rows.push(Element::from(text(format!("u64: {:}", unsigned))));
                         }
 
-                        let f64_display = text(format!("f64: {:.}", f64::from_be_bytes(bytes)));
-                        ui_rows.push(Element::from(f64_display));
+                        ui_rows.push(Element::from(text(format!(
+                            "f64: {:.}",
+                            f64::from_be_bytes(bytes)
+                        ))));
                     }
                     _ => (),
+                }
+
+                if selection_len > 0 {
+                    // UTF-8
+                    if let Ok(string) = String::from_utf8(selected_bytes.clone()) {
+                        ui_rows.push(Element::from(
+                            text(format!("UTF-8: {:}", string)).font(Font::with_name("Meiryo")),
+                        ));
+                    }
+
+                    // UTF-16
+                    if let Some(string) = UTF_16BE
+                        .decode_without_bom_handling_and_without_replacement(&selected_bytes)
+                    {
+                        ui_rows.push(Element::from(
+                            text(format!("UTF-16: {:}", string)).font(Font::with_name("Meiryo")),
+                        ));
+                    }
+
+                    // EUC-JP
+                    if let Some(string) =
+                        EUC_JP.decode_without_bom_handling_and_without_replacement(&selected_bytes)
+                    {
+                        ui_rows.push(Element::from(
+                            text(format!("EUC-JP: {:}", string)).font(Font::with_name("Meiryo")),
+                        ));
+                    }
+
+                    //Shift_JIS
+                    if let Some(string) = SHIFT_JIS
+                        .decode_without_bom_handling_and_without_replacement(&selected_bytes)
+                    {
+                        ui_rows.push(Element::from(
+                            text(format!("Shift_JIS: {:}", string)).font(Font::with_name("Meiryo")),
+                        ));
+                    }
                 }
             }
 
