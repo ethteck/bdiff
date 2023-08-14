@@ -14,3 +14,4 @@ pub type Text<'a> = iced::widget::Text<'a, Renderer>;
 pub type Container<'a, Message> = iced::widget::Container<'a, Message, Renderer>;
 pub type Button<'a, Message> = iced::widget::Button<'a, Message>;
 pub type Space = iced::widget::Space;
+pub type Rule<Renderer> = iced::widget::Rule<Renderer>;

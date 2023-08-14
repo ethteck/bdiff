@@ -5,11 +5,6 @@ use theme_data::Colors;
 use crate::theme_data;
 use crate::widget::{byte_text, clip_viewport};
 
-// TODO: If we use non-standard font sizes, we should consider
-// Config.font.size since it's user configurable
-pub const TEXT_SIZE: f32 = 13.0;
-pub const ICON_SIZE: f32 = 12.0;
-
 #[derive(Debug, Clone)]
 pub enum Theme {
     Selected(theme_data::Theme),
@@ -72,7 +67,6 @@ impl application::StyleSheet for Theme {
 pub enum Rule {
     #[default]
     Default,
-    Unread,
 }
 
 impl rule::StyleSheet for Theme {
@@ -82,12 +76,6 @@ impl rule::StyleSheet for Theme {
         match style {
             Rule::Default => rule::Appearance {
                 color: self.colors().background.light,
-                width: 1,
-                radius: 0.0.into(),
-                fill_mode: rule::FillMode::Full,
-            },
-            Rule::Unread => rule::Appearance {
-                color: self.colors().accent.base,
                 width: 1,
                 radius: 0.0.into(),
                 fill_mode: rule::FillMode::Full,

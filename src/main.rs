@@ -47,7 +47,7 @@ fn main() -> iced::Result {
         flags: Flags {
             file_path: path.to_path_buf(),
         },
-        default_font: Font::DEFAULT,
+        default_font: Font::with_name("Consolas"),
         default_text_size: 16.0,
         antialiasing: false,
         exit_on_close_request: true,
@@ -79,19 +79,32 @@ pub struct BinFile {
     data: Vec<u8>,
 }
 
+#[derive(Default, Debug, PartialEq)]
+enum SelectionState {
+    #[default]
+    None,
+    Selecting,
+    Selected,
+}
+
 #[derive(Debug, Default)]
 struct HVSelection {
-    start: usize,
-    end: usize,
-    selecting: bool,
+    first: usize,
+    second: usize,
+    state: SelectionState,
 }
 
 impl HVSelection {
-    fn contains(&self, grid_pos: usize) -> bool {
-        let low = self.start.min(self.end);
-        let high = self.end.max(self.start);
+    fn start(&self) -> usize {
+        self.first.min(self.second)
+    }
 
-        grid_pos >= low && grid_pos <= high
+    fn end(&self) -> usize {
+        self.second.max(self.first)
+    }
+
+    fn contains(&self, grid_pos: usize) -> bool {
+        self.state != SelectionState::None && grid_pos >= self.start() && grid_pos <= self.end()
     }
 }
 
@@ -136,13 +149,22 @@ impl HexView {
         }
         hex_rows
     }
+
+    fn get_selected_bytes(&self) -> Option<Vec<u8>> {
+        match self.selection.state {
+            SelectionState::None => None,
+            SelectionState::Selecting | SelectionState::Selected => {
+                Some(self.file.data[self.selection.start()..self.selection.end() + 1].to_vec())
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
     FileLoaded(Result<BinFile, Error>),
     EventOccurred(Event),
-    SelectedText(Vec<(u32, String)>),
+    CopySelection(Vec<(u32, String)>),
     SelectionAdded(u32),
 }
 
@@ -203,7 +225,16 @@ impl Application for HexView {
                         self.adjust_cur_pos(-(y as i32) * self.bytes_per_row as i32);
                     }
                     Event::Mouse(iced::mouse::Event::ButtonReleased(Button::Left)) => {
-                        self.selection.selecting = false;
+                        match self.selection.state {
+                            SelectionState::None => (),
+                            SelectionState::Selecting => {
+                                self.selection.state = SelectionState::Selected;
+                            }
+                            SelectionState::Selected => (),
+                        }
+                    }
+                    Event::Mouse(iced::mouse::Event::ButtonReleased(Button::Middle)) => {
+                        self.selection.state = SelectionState::None;
                     }
                     Event::Keyboard(iced::keyboard::Event::KeyPressed { key_code, .. }) => {
                         match key_code {
@@ -236,7 +267,8 @@ impl Application for HexView {
 
                 Command::none()
             }
-            Message::SelectedText(contents) => {
+            Message::CopySelection(contents) => {
+                // TODO rewrite
                 let contents = contents
                     .into_iter()
                     .fold(String::new(), |acc, (_, content)| {
@@ -249,16 +281,16 @@ impl Application for HexView {
                 Command::none()
             }
             Message::SelectionAdded(grid_pos) => {
-                let gp = self.cur_pos + grid_pos as usize;
+                let selection_pos = self.cur_pos + grid_pos as usize;
 
-                match self.selection.selecting {
-                    true => {
-                        self.selection.end = gp;
+                match self.selection.state {
+                    SelectionState::Selecting => {
+                        self.selection.second = selection_pos;
                     }
-                    false => {
-                        self.selection.selecting = true;
-                        self.selection.start = gp;
-                        self.selection.end = gp;
+                    SelectionState::None | SelectionState::Selected => {
+                        self.selection.state = SelectionState::Selecting;
+                        self.selection.first = selection_pos;
+                        self.selection.second = selection_pos;
                     }
                 }
                 Command::none()
@@ -272,7 +304,7 @@ impl Application for HexView {
 
     fn view(&self) -> Element<Message> {
         let content = {
-            let file_name_text = text(self.file.path.clone()).font(Font::with_name("Consolas"));
+            let file_name_text = text(self.file.path.clone());
 
             let hex_rows: Vec<HexRow> = self.get_cur_hex_rows();
 
@@ -297,9 +329,7 @@ impl Application for HexView {
                         false => theme::Text::Default,
                     };
                     let offset_digit_text: iced_core::widget::Text<'_, Renderer> =
-                        text(format!("{:X?}", digit))
-                            .font(Font::with_name("Consolas"))
-                            .style(style);
+                        text(format!("{:X?}", digit)).style(style);
 
                     if i < num_digits && (i % 4) == 0 {
                         offset_text_elems.push(Element::from(Space::with_width(5)));
@@ -324,7 +354,6 @@ impl Application for HexView {
                         self.selection.contains(self.cur_pos + grid_pos),
                         Message::SelectionAdded,
                     )
-                    .font(Font::with_name("Consolas"))
                     .style(style);
 
                     if i > 0 {
@@ -359,7 +388,6 @@ impl Application for HexView {
                         self.selection.contains(self.cur_pos + grid_pos),
                         Message::SelectionAdded,
                     )
-                    .font(Font::with_name("Consolas"))
                     .style(style);
                     ascii_text_elems.push(Element::from(text_element));
                 }
@@ -381,23 +409,112 @@ impl Application for HexView {
                 .push(Space::with_width(10))
                 .push(ClipViewport::new(ascii_col));
 
-            let f32_display = text(format!("{:}", 5.0)).font(Font::with_name("Consolas"));
-
-            let ui_rows: Vec<Element<Message>> = vec![
+            let mut ui_rows: Vec<Element<Message>> = vec![
                 Element::from(file_name_text),
                 Element::from(data_row),
-                Element::from(f32_display),
+                //Element::from(Rule::horizontal(1)),
             ];
+
+            match self.selection.state {
+                SelectionState::None => (),
+                SelectionState::Selecting | SelectionState::Selected => {
+                    let selection_display = text(format!(
+                        "Selection: 0x{:X} : 0x{:X}",
+                        self.selection.start(),
+                        self.selection.end() + 1
+                    ));
+                    ui_rows.push(Element::from(selection_display));
+                }
+            }
+
+            if let Some(selected_bytes) = self.get_selected_bytes() {
+                let selection_len = selected_bytes.len();
+
+                match selection_len {
+                    0 => (),
+                    1 => {
+                        let bytes: [u8; 1] = selected_bytes[0..1].try_into().unwrap_or_default();
+
+                        let signed = i8::from_be_bytes(bytes);
+                        if signed >= 0 {
+                            let signed_display = text(format!("s8/u8: {:}", signed));
+                            ui_rows.push(Element::from(signed_display));
+                        } else {
+                            let signed_display = text(format!("s8: {:}", signed));
+                            ui_rows.push(Element::from(signed_display));
+
+                            let unsigned = u8::from_be_bytes(bytes);
+                            let unsigned_display = text(format!("u8: {:}", unsigned));
+                            ui_rows.push(Element::from(unsigned_display));
+                        }
+                    }
+                    2 => {
+                        let bytes: [u8; 2] = selected_bytes[0..2].try_into().unwrap_or_default();
+
+                        let signed = i16::from_be_bytes(bytes);
+                        if signed >= 0 {
+                            let signed_display = text(format!("s16/u16: {:}", signed));
+                            ui_rows.push(Element::from(signed_display));
+                        } else {
+                            let signed_display = text(format!("s16: {:}", signed));
+                            ui_rows.push(Element::from(signed_display));
+
+                            let unsigned = u16::from_be_bytes(bytes);
+                            let unsigned_display = text(format!("u16: {:}", unsigned));
+                            ui_rows.push(Element::from(unsigned_display));
+                        }
+                    }
+                    4 => {
+                        let bytes: [u8; 4] = selected_bytes[0..4].try_into().unwrap_or_default();
+
+                        let signed = i32::from_be_bytes(bytes);
+                        if signed >= 0 {
+                            let signed_display = text(format!("s32/u32: {:}", signed));
+                            ui_rows.push(Element::from(signed_display));
+                        } else {
+                            let signed_display = text(format!("s32: {:}", signed));
+                            ui_rows.push(Element::from(signed_display));
+
+                            let unsigned = u32::from_be_bytes(bytes);
+                            let unsigned_display = text(format!("u32: {:}", unsigned));
+                            ui_rows.push(Element::from(unsigned_display));
+                        }
+
+                        let f32_display = text(format!("f32: {:.}", f32::from_be_bytes(bytes)));
+                        ui_rows.push(Element::from(f32_display));
+                    }
+                    8 => {
+                        let bytes: [u8; 8] = selected_bytes[0..8].try_into().unwrap_or_default();
+
+                        let signed = i64::from_be_bytes(bytes);
+                        if signed >= 0 {
+                            let signed_display = text(format!("s64/u64: {:}", signed));
+                            ui_rows.push(Element::from(signed_display));
+                        } else {
+                            let signed_display = text(format!("s64: {:}", signed));
+                            ui_rows.push(Element::from(signed_display));
+
+                            let unsigned = u64::from_be_bytes(bytes);
+                            let unsigned_display = text(format!("u64: {:}", unsigned));
+                            ui_rows.push(Element::from(unsigned_display));
+                        }
+
+                        let f64_display = text(format!("f64: {:.}", f64::from_be_bytes(bytes)));
+                        ui_rows.push(Element::from(f64_display));
+                    }
+                    _ => (),
+                }
+            }
 
             let hex_table = Column::with_children(ui_rows).padding(10);
 
-            hex_table.max_width(700)
+            hex_table
         };
 
         container(content)
             .style(theme::Container::PaneBody { selected: false })
-            // .width(Length::Fill)
-            // .height(Length::Fill)
+            //.width(Length::Shrink)
+            //.height(Length::Shrink)
             .into()
     }
 
