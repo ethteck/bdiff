@@ -7,8 +7,8 @@ mod window;
 
 use std::fs::File;
 use std::io::{BufReader, Read};
-use std::path::{Path, PathBuf};
-use std::result;
+use std::path::PathBuf;
+use std::result::Result;
 
 use argh::FromArgs;
 
@@ -30,25 +30,23 @@ use encoding_rs::*;
 #[derive(FromArgs)]
 /// binary differ
 struct Args {
-    /// input file
+    /// input files
     #[argh(positional)]
-    file: String,
+    files: Vec<PathBuf>,
 }
 
 struct Flags {
-    file_path: PathBuf,
+    file_paths: Vec<PathBuf>,
 }
 
 fn main() -> iced::Result {
     let args: Args = argh::from_env();
 
-    let path: &Path = Path::new(&args.file);
-
-    HexView::run(Settings {
+    BDiff::run(Settings {
         id: None,
         window: window::settings(),
         flags: Flags {
-            file_path: path.to_path_buf(),
+            file_paths: args.files,
         },
         default_font: Font::with_name("Consolas"),
         default_text_size: 16.0,
@@ -57,10 +55,10 @@ fn main() -> iced::Result {
     })
 }
 
-fn read_file(path: PathBuf) -> std::result::Result<BinFile, BDiffError> {
+fn read_file(path: PathBuf) -> Result<BinFile, BDiffError> {
     let file = match File::open(path.clone()) {
         Ok(file) => file,
-        Err(_error) => return result::Result::Err(BDiffError::IOError),
+        Err(_error) => return Result::Err(BDiffError::IOError),
     };
 
     let mut buf_reader = BufReader::new(file);
@@ -68,7 +66,7 @@ fn read_file(path: PathBuf) -> std::result::Result<BinFile, BDiffError> {
 
     let _ = buf_reader
         .read_to_end(&mut buffer)
-        .or(result::Result::Err(BDiffError::IOError));
+        .or(Err(BDiffError::IOError));
 
     Ok(BinFile {
         path: path.to_str().unwrap().to_string(),
@@ -118,11 +116,17 @@ impl HVSelection {
 }
 
 #[derive(Default)]
+struct BDiff {
+    hex_views: Vec<HexView>,
+    theme: Theme,
+}
+
+#[derive(Default)]
 struct HexView {
+    id: u32,
     file: BinFile,
     num_rows: u32,
     bytes_per_row: usize,
-    theme: Theme,
     cur_pos: usize,
     selection: HVSelection,
 }
@@ -171,12 +175,11 @@ impl HexView {
 
 #[derive(Debug, Clone)]
 pub enum Message {
-    FileLoaded(std::result::Result<BinFile, BDiffError>),
-    FileReloaded(std::result::Result<BinFile, BDiffError>),
     WatchedFileChanged(notify::Event),
+    FileReloaded(Result<BinFile, BDiffError>),
     EventOccurred(Event),
     CopySelection(Vec<(u32, String)>),
-    SelectionAdded(u32),
+    SelectionAdded(u32, u32),
 }
 
 struct HexRow {
@@ -184,18 +187,40 @@ struct HexRow {
     data: Vec<u8>,
 }
 
-impl Application for HexView {
+impl Application for BDiff {
     type Executor = iced::executor::Default;
     type Message = Message;
     type Theme = Theme;
     type Flags = Flags;
 
-    fn new(_flags: Flags) -> (HexView, Command<Message>) {
-        let path = _flags.file_path;
+    fn new(flags: Self::Flags) -> (Self, Command<Self::Message>) {
+        let paths = flags.file_paths;
+        let mut hex_views: Vec<HexView> = Vec::new();
+        let min_rows = 10;
+        let max_rows = 20;
+
+        for (i, path) in paths.iter().enumerate() {
+            let file = read_file(path.clone()).unwrap();
+
+            let bytes_per_row = 0x10;
+
+            let num_rows = (file.data.len() / bytes_per_row).clamp(min_rows, max_rows) as u32;
+
+            hex_views.push(HexView {
+                id: i as u32,
+                file,
+                num_rows,
+                bytes_per_row,
+                ..Default::default()
+            });
+        }
 
         (
-            HexView::default(),
-            Command::perform(async { read_file(path) }, Message::FileLoaded),
+            BDiff {
+                hex_views,
+                theme: Theme::default(),
+            },
+            Command::none(),
         )
     }
 
@@ -203,19 +228,60 @@ impl Application for HexView {
         String::from("bdiff")
     }
 
-    fn update(&mut self, message: Message) -> Command<Message> {
+    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
-            Message::FileLoaded(Ok(bin_file)) => {
-                *self = HexView {
-                    file: bin_file,
-                    num_rows: 30,
-                    bytes_per_row: 0x10,
-                    theme: Theme::default(),
-                    selection: HVSelection::default(),
-                    cur_pos: 0,
-                };
+            Message::WatchedFileChanged(_) => todo!(),
+            Message::FileReloaded(_) => todo!(),
+            Message::EventOccurred(_) => {
+                for hex_view in &mut self.hex_views {
+                    let _ = hex_view.update(message.clone()); // TODO does this ever have to return a command?
+                }
                 Command::none()
             }
+            Message::CopySelection(_) => todo!(),
+            Message::SelectionAdded(hex_view_id, grid_pos) => {
+                for hex_view in &mut self.hex_views {
+                    if hex_view.id == hex_view_id {
+                        hex_view.update_selection_state(grid_pos);
+                    }
+                }
+                Command::none()
+            }
+        }
+    }
+
+    fn view(&self) -> iced::Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
+        let cols = Column::with_children(
+            self.hex_views
+                .iter()
+                .map(|hex_view| hex_view.view())
+                .collect(),
+        );
+        container(cols).into()
+    }
+
+    fn subscription(&self) -> Subscription<Message> {
+        let events_sub = subscription::events().map(Message::EventOccurred);
+
+        let hex_view_subs = self
+            .hex_views
+            .iter()
+            .map(|hex_view| hex_view.subscription());
+
+        let mut subs = vec![events_sub];
+        subs.extend(hex_view_subs);
+
+        Subscription::batch(subs)
+    }
+
+    fn theme(&self) -> Theme {
+        self.theme.clone()
+    }
+}
+
+impl HexView {
+    fn update(&mut self, message: Message) -> Command<Message> {
+        match message {
             Message::FileReloaded(Ok(bin_file)) => {
                 self.file = bin_file;
                 if self.selection.start() > self.file.data.len()
@@ -225,7 +291,6 @@ impl Application for HexView {
                 }
                 Command::none()
             }
-            Message::FileLoaded(Err(_error)) => Command::none(),
             Message::FileReloaded(Err(_error)) => Command::none(),
             Message::EventOccurred(event) => {
                 match event {
@@ -290,34 +355,32 @@ impl Application for HexView {
                 }
                 Command::none()
             }
-            Message::SelectionAdded(grid_pos) => {
-                let selection_pos = self.cur_pos + grid_pos as usize;
-
-                match self.selection.state {
-                    SelectionState::Selecting => {
-                        self.selection.second = selection_pos;
-                    }
-                    SelectionState::None | SelectionState::Selected => {
-                        self.selection.state = SelectionState::Selecting;
-                        self.selection.first = selection_pos;
-                        self.selection.second = selection_pos;
-                    }
-                }
-                Command::none()
-            }
             Message::WatchedFileChanged(event) => {
                 let pbuf = event.paths[0].clone();
 
                 Command::perform(async { read_file(pbuf) }, Message::FileReloaded)
             }
+            Message::SelectionAdded(_, _) => todo!(),
+        }
+    }
+
+    fn update_selection_state(&mut self, grid_pos: u32) {
+        let selection_pos = self.cur_pos + grid_pos as usize;
+
+        match self.selection.state {
+            SelectionState::Selecting => {
+                self.selection.second = selection_pos;
+            }
+            SelectionState::None | SelectionState::Selected => {
+                self.selection.state = SelectionState::Selecting;
+                self.selection.first = selection_pos;
+                self.selection.second = selection_pos;
+            }
         }
     }
 
     fn subscription(&self) -> Subscription<Message> {
-        let events_sub = subscription::events().map(Message::EventOccurred);
-        let file_change_sub = watcher::subscription(self.file.path.clone());
-
-        Subscription::batch(vec![events_sub, file_change_sub])
+        watcher::subscription(self.file.path.clone())
     }
 
     fn view(&self) -> Element<Message> {
@@ -334,15 +397,15 @@ impl Application for HexView {
                 let mut offset_text_elems: Vec<Element<Message>> = Vec::new();
                 let num_digits = 8; // 8 of those boys
                 let mut i = num_digits;
-                let mut leading = true;
+                let mut offset_leading_zeros = true;
 
                 while i > 0 {
                     let digit = row.offset >> ((i - 1) * 4) & 0xF;
 
-                    if leading && digit > 0 {
-                        leading = false;
+                    if offset_leading_zeros && digit > 0 {
+                        offset_leading_zeros = false;
                     }
-                    let style = match leading {
+                    let style = match offset_leading_zeros {
                         true => theme::Text::Fainter,
                         false => theme::Text::Default,
                     };
@@ -368,6 +431,7 @@ impl Application for HexView {
 
                     let text_element = byte_text(
                         format!("{:02X?}", byte),
+                        self.id,
                         grid_pos as u32,
                         self.selection.contains(self.cur_pos + grid_pos),
                         Message::SelectionAdded,
@@ -402,6 +466,7 @@ impl Application for HexView {
 
                     let text_element = byte_text(
                         ascii_char,
+                        self.id,
                         grid_pos as u32,
                         self.selection.contains(self.cur_pos + grid_pos),
                         Message::SelectionAdded,
@@ -559,9 +624,5 @@ impl Application for HexView {
             //.width(Length::Shrink)
             //.height(Length::Shrink)
             .into()
-    }
-
-    fn theme(&self) -> Theme {
-        self.theme.clone()
     }
 }

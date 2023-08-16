@@ -9,15 +9,22 @@ pub use self::text::{LineHeight, Shaping};
 
 pub fn byte_text<'a, Message, Renderer>(
     content: impl ToString,
+    hex_view_id: u32,
     grid_pos: u32,
     selected: bool,
-    on_selected: impl Fn(u32) -> Message + 'static,
+    on_selected: impl Fn(u32, u32) -> Message + 'static,
 ) -> Text<'a, Message, Renderer>
 where
     Renderer: text::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    Text::new(content.to_string(), grid_pos, selected, on_selected)
+    Text::new(
+        content.to_string(),
+        hex_view_id,
+        grid_pos,
+        selected,
+        on_selected,
+    )
 }
 
 pub struct Text<'a, Message, Renderer>
@@ -35,9 +42,10 @@ where
     font: Option<Renderer::Font>,
     shaping: Shaping,
     style: <Renderer::Theme as StyleSheet>::Style,
+    hex_view_id: u32,
     grid_pos: u32,
     selected: bool,
-    on_selected: Box<dyn Fn(u32) -> Message>,
+    on_selected: Box<dyn Fn(u32, u32) -> Message>,
 }
 
 impl<'a, Message, Renderer> Text<'a, Message, Renderer>
@@ -47,9 +55,10 @@ where
 {
     pub fn new(
         content: impl Into<Cow<'a, str>>,
+        hex_view_id: u32,
         grid_pos: u32,
         selected: bool,
-        on_selected: impl Fn(u32) -> Message + 'static,
+        on_selected: impl Fn(u32, u32) -> Message + 'static,
     ) -> Self {
         Text {
             content: content.into(),
@@ -65,6 +74,7 @@ where
             #[cfg(not(debug_assertions))]
             shaping: Shaping::Advanced,
             style: Default::default(),
+            hex_view_id,
             grid_pos,
             selected,
             on_selected: Box::new(on_selected),
@@ -179,7 +189,7 @@ where
                     *state = State::Selecting;
 
                     if layout.bounds().contains(cursor) {
-                        shell.publish((self.on_selected)(self.grid_pos));
+                        shell.publish((self.on_selected)(self.hex_view_id, self.grid_pos));
                     }
                 } else {
                     *state = State::Idle;
@@ -199,7 +209,7 @@ where
                 if let Some(cursor) = cursor.position() {
                     if let State::Selecting = state {
                         if layout.bounds().contains(cursor) {
-                            shell.publish((self.on_selected)(self.grid_pos));
+                            shell.publish((self.on_selected)(self.hex_view_id, self.grid_pos));
                         }
                     }
                 }
