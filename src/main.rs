@@ -140,7 +140,7 @@ impl Id {
 
 impl Default for Id {
     fn default() -> Self {
-        Id::unique()
+        Self::unique()
     }
 }
 
@@ -245,7 +245,7 @@ impl Application for BDiff {
         }
 
         (
-            BDiff {
+            Self {
                 hex_views,
                 theme: Theme::default(),
             },

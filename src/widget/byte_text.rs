@@ -200,7 +200,7 @@ where
             iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
             | iced::Event::Touch(touch::Event::FingerLifted { .. })
             | iced::Event::Touch(touch::Event::FingerLost { .. }) => {
-                if let State::Selecting = *state {
+                if matches!(*state, State::Selecting) {
                     *state = State::Selected;
                 } else {
                     *state = State::Idle;
@@ -209,13 +209,11 @@ where
             iced::Event::Mouse(mouse::Event::CursorMoved { .. })
             | iced::Event::Touch(touch::Event::FingerMoved { .. }) => {
                 if let Some(cursor) = cursor.position() {
-                    if let State::Selecting = state {
-                        if layout.bounds().contains(cursor) {
-                            shell.publish((self.on_selected)(
-                                self.hex_view_id.clone(),
-                                self.grid_pos,
-                            ));
-                        }
+                    if matches!(state, State::Selecting) && layout.bounds().contains(cursor) {
+                        shell.publish((self.on_selected)(
+                            self.hex_view_id.clone(),
+                            self.grid_pos,
+                        ));
                     }
                 }
             }
