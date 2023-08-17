@@ -5,6 +5,7 @@ mod watcher;
 pub mod widget;
 mod window;
 
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Read};
 use std::path::PathBuf;
@@ -117,8 +118,9 @@ impl HVSelection {
 
 #[derive(Default)]
 struct BDiff {
-    hex_views: Vec<HexView>,
+    hex_views: HashMap<Id, HexView>,
     theme: Theme,
+    focused_hex_view: Option<Id>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -207,7 +209,7 @@ pub enum Message {
     WatchedFileChanged(notify::Event),
     FileReloaded(Result<BinFile, BDiffError>),
     EventOccurred(Event),
-    CopySelection(Vec<(u32, String)>),
+    CopySelection,
     SelectionAdded(Id, u32),
 }
 
@@ -224,30 +226,35 @@ impl Application for BDiff {
 
     fn new(flags: Self::Flags) -> (Self, Command<Self::Message>) {
         let paths = flags.file_paths;
-        let mut hex_views: Vec<HexView> = Vec::new();
+        let mut hex_views: HashMap<Id, HexView> = HashMap::new();
         let min_rows = 10;
         let max_rows = 20;
+        let bytes_per_row = 0x10;
 
         for path in paths {
             let file = read_file(path.clone()).unwrap();
 
-            let bytes_per_row = 0x10;
-
             let num_rows = (file.data.len() / bytes_per_row).clamp(min_rows, max_rows) as u32;
 
-            hex_views.push(HexView {
-                id: Id::unique(),
-                file,
-                num_rows,
-                bytes_per_row,
-                ..Default::default()
-            });
+            let id = Id::unique();
+
+            hex_views.insert(
+                id.clone(),
+                HexView {
+                    id,
+                    file,
+                    num_rows,
+                    bytes_per_row,
+                    ..Default::default()
+                },
+            );
         }
 
         (
             Self {
                 hex_views,
                 theme: Theme::default(),
+                ..Default::default()
             },
             Command::none(),
         )
@@ -262,17 +269,22 @@ impl Application for BDiff {
             Message::WatchedFileChanged(_) => todo!(),
             Message::FileReloaded(_) => todo!(),
             Message::EventOccurred(_) => {
-                for hex_view in &mut self.hex_views {
+                for hex_view in self.hex_views.values_mut() {
                     let _ = hex_view.update(message.clone()); // TODO does this ever have to return a command?
                 }
                 Command::none()
             }
-            Message::CopySelection(_) => todo!(),
-            Message::SelectionAdded(hex_view_id, grid_pos) => {
-                for hex_view in &mut self.hex_views {
-                    if hex_view.id == hex_view_id {
-                        hex_view.update_selection_state(grid_pos);
+            Message::CopySelection => {
+                if let Some(focused) = &self.focused_hex_view {
+                    if let Some(hex_view) = self.hex_views.get_mut(focused) {
+                        return hex_view.update(message.clone());
                     }
+                }
+                Command::none()
+            }
+            Message::SelectionAdded(hex_view_id, grid_pos) => {
+                if let Some(hex_view) = self.hex_views.get_mut(&hex_view_id) {
+                    hex_view.update_selection_state(grid_pos);
                 }
                 Command::none()
             }
@@ -282,7 +294,7 @@ impl Application for BDiff {
     fn view(&self) -> iced::Element<'_, Self::Message, iced::Renderer<Self::Theme>> {
         let cols = Column::with_children(
             self.hex_views
-                .iter()
+                .values()
                 .map(|hex_view| hex_view.view())
                 .collect(),
         );
@@ -294,7 +306,7 @@ impl Application for BDiff {
 
         let hex_view_subs = self
             .hex_views
-            .iter()
+            .values()
             .map(|hex_view| hex_view.subscription());
 
         let mut subs = vec![events_sub];
@@ -371,13 +383,9 @@ impl HexView {
 
                 Command::none()
             }
-            Message::CopySelection(contents) => {
-                // TODO rewrite
-                let contents = contents
-                    .into_iter()
-                    .fold(String::new(), |acc, (_, content)| {
-                        format!("{}{}\n", acc, content)
-                    });
+            Message::CopySelection => {
+                let selected_bytes = self.get_selected_bytes().unwrap_or_default();
+                let contents = String::from_utf8(selected_bytes).unwrap_or_default();
 
                 if !contents.is_empty() {
                     return clipboard::write(contents);
