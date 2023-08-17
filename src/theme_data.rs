@@ -12,7 +12,7 @@ pub struct Theme {
 
 impl Theme {
     pub fn new(name: String, palette: &Palette) -> Self {
-        Theme {
+        Self {
             name,
             colors: Colors::new(palette),
         }
@@ -42,7 +42,7 @@ pub struct Colors {
 
 impl Colors {
     pub fn new(palette: &Palette) -> Self {
-        Colors {
+        Self {
             background: Subpalette::from_color(palette.background, palette),
             text: Subpalette::from_color(palette.text, palette),
             action: Subpalette::from_color(palette.action, palette),
@@ -70,10 +70,10 @@ pub struct Subpalette {
 }
 
 impl Subpalette {
-    pub fn from_color(color: Color, palette: &Palette) -> Subpalette {
+    pub fn from_color(color: Color, palette: &Palette) -> Self {
         let is_dark = is_dark(palette.background);
 
-        Subpalette {
+        Self {
             base: color,
             light: lighten(color, 0.03),
             lighter: lighten(color, 0.06),
@@ -117,8 +117,8 @@ pub struct Palette {
 }
 
 impl Default for Palette {
-    fn default() -> Palette {
-        Palette {
+    fn default() -> Self {
+        Self {
             background: hex_to_color("#2a2a2a").unwrap(),
             text: hex_to_color("#eeeeee").unwrap(),
             action: hex_to_color("#9382f2").unwrap(),

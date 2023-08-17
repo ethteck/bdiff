@@ -5,19 +5,28 @@ use iced::advanced::widget::{tree, Tree};
 use iced::advanced::{layout, mouse, renderer, text, Layout, Widget};
 use iced::{alignment, event, touch, Color, Element, Length, Pixels, Rectangle, Size};
 
+use crate::Id;
+
 pub use self::text::{LineHeight, Shaping};
 
 pub fn byte_text<'a, Message, Renderer>(
     content: impl ToString,
+    hex_view_id: Id,
     grid_pos: u32,
     selected: bool,
-    on_selected: impl Fn(u32) -> Message + 'static,
+    on_selected: impl Fn(Id, u32) -> Message + 'static,
 ) -> Text<'a, Message, Renderer>
 where
     Renderer: text::Renderer,
     Renderer::Theme: StyleSheet,
 {
-    Text::new(content.to_string(), grid_pos, selected, on_selected)
+    Text::new(
+        content.to_string(),
+        hex_view_id,
+        grid_pos,
+        selected,
+        on_selected,
+    )
 }
 
 pub struct Text<'a, Message, Renderer>
@@ -35,9 +44,10 @@ where
     font: Option<Renderer::Font>,
     shaping: Shaping,
     style: <Renderer::Theme as StyleSheet>::Style,
+    hex_view_id: Id,
     grid_pos: u32,
     selected: bool,
-    on_selected: Box<dyn Fn(u32) -> Message>,
+    on_selected: Box<dyn Fn(Id, u32) -> Message>,
 }
 
 impl<'a, Message, Renderer> Text<'a, Message, Renderer>
@@ -47,9 +57,10 @@ where
 {
     pub fn new(
         content: impl Into<Cow<'a, str>>,
+        hex_view_id: Id,
         grid_pos: u32,
         selected: bool,
-        on_selected: impl Fn(u32) -> Message + 'static,
+        on_selected: impl Fn(Id, u32) -> Message + 'static,
     ) -> Self {
         Text {
             content: content.into(),
@@ -65,6 +76,7 @@ where
             #[cfg(not(debug_assertions))]
             shaping: Shaping::Advanced,
             style: Default::default(),
+            hex_view_id,
             grid_pos,
             selected,
             on_selected: Box::new(on_selected),
@@ -179,7 +191,7 @@ where
                     *state = State::Selecting;
 
                     if layout.bounds().contains(cursor) {
-                        shell.publish((self.on_selected)(self.grid_pos));
+                        shell.publish((self.on_selected)(self.hex_view_id.clone(), self.grid_pos));
                     }
                 } else {
                     *state = State::Idle;
@@ -188,7 +200,7 @@ where
             iced::Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left))
             | iced::Event::Touch(touch::Event::FingerLifted { .. })
             | iced::Event::Touch(touch::Event::FingerLost { .. }) => {
-                if let State::Selecting = *state {
+                if matches!(*state, State::Selecting) {
                     *state = State::Selected;
                 } else {
                     *state = State::Idle;
@@ -197,10 +209,11 @@ where
             iced::Event::Mouse(mouse::Event::CursorMoved { .. })
             | iced::Event::Touch(touch::Event::FingerMoved { .. }) => {
                 if let Some(cursor) = cursor.position() {
-                    if let State::Selecting = state {
-                        if layout.bounds().contains(cursor) {
-                            shell.publish((self.on_selected)(self.grid_pos));
-                        }
+                    if matches!(state, State::Selecting) && layout.bounds().contains(cursor) {
+                        shell.publish((self.on_selected)(
+                            self.hex_view_id.clone(),
+                            self.grid_pos,
+                        ));
                     }
                 }
             }

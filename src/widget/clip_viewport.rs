@@ -268,14 +268,7 @@ pub fn update<Message>(
 
     let content = layout.children().next().unwrap();
 
-    update_content(
-        event.clone(),
-        content,
-        cursor,
-        clipboard,
-        shell,
-        &layout.bounds(),
-    );
+    update_content(event, content, cursor, clipboard, shell, &layout.bounds());
     event::Status::Ignored
 }
 

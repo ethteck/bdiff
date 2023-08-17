@@ -4,7 +4,7 @@ use iced::window::{self, icon};
 pub use iced::window::{close, Settings};
 
 pub fn settings() -> Settings {
-    let size: (u32, u32) = (700, 750);
+    let size: (u32, u32) = (1000, 1300);
     let icon: Result<window::Icon, icon::Error> = load_icon();
 
     match icon {

@@ -17,7 +17,7 @@ pub enum Theme {
 impl Theme {
     pub fn preview(&self, theme: theme_data::Theme) -> Self {
         match self {
-            Theme::Selected(selected) | Theme::Preview { selected, .. } => Self::Preview {
+            Self::Selected(selected) | Self::Preview { selected, .. } => Self::Preview {
                 selected: selected.clone(),
                 preview: theme,
             },
@@ -26,7 +26,7 @@ impl Theme {
 
     pub fn selected(&self) -> Self {
         match self {
-            Theme::Selected(selected) | Theme::Preview { selected, .. } => {
+            Self::Selected(selected) | Self::Preview { selected, .. } => {
                 Self::Selected(selected.clone())
             }
         }
@@ -34,15 +34,15 @@ impl Theme {
 
     fn colors(&self) -> &Colors {
         match self {
-            Theme::Selected(selected) => &selected.colors,
-            Theme::Preview { preview, .. } => &preview.colors,
+            Self::Selected(selected) => &selected.colors,
+            Self::Preview { preview, .. } => &preview.colors,
         }
     }
 }
 
 impl From<theme_data::Theme> for Theme {
     fn from(theme: theme_data::Theme) -> Self {
-        Theme::Selected(theme)
+        Self::Selected(theme)
     }
 }
 
@@ -154,9 +154,7 @@ impl container::StyleSheet for Theme {
 
     fn appearance(&self, style: &Self::Style) -> container::Appearance {
         match style {
-            Container::Default => container::Appearance {
-                ..Default::default()
-            },
+            Container::Default => Default::default(),
             Container::Primary => container::Appearance {
                 background: Some(Background::Color(self.colors().background.base)),
                 text_color: Some(self.colors().text.base),
@@ -295,12 +293,12 @@ impl button::StyleSheet for Theme {
     fn pressed(&self, style: &Self::Style) -> button::Appearance {
         let active = self.active(style);
         match style {
-            Button::Default => button::Appearance { ..active },
-            Button::Secondary => button::Appearance { ..active },
-            Button::SideMenu { selected: _ } => button::Appearance { ..active },
-            Button::Pane { selected: _ } => button::Appearance { ..active },
-            Button::Context => button::Appearance { ..active },
-            Button::Bare => button::Appearance { ..active },
+            Button::Default => active,
+            Button::Secondary => active,
+            Button::SideMenu { selected: _ } => active,
+            Button::Pane { selected: _ } => active,
+            Button::Context => active,
+            Button::Bare => active,
         }
     }
 
@@ -344,7 +342,7 @@ impl button::StyleSheet for Theme {
                 background: Some(Background::Color(self.colors().background.darker)),
                 ..active
             },
-            Button::Bare => button::Appearance { ..active },
+            Button::Bare => active,
         }
     }
 
@@ -411,8 +409,8 @@ impl scrollable::StyleSheet for Theme {
     ) -> scrollable::Scrollbar {
         let active = self.active(style);
         match style {
-            Scrollable::Default => scrollable::Scrollbar { ..active },
-            Scrollable::Hidden => scrollable::Scrollbar { ..active },
+            Scrollable::Default => active,
+            Scrollable::Hidden => active,
         }
     }
 }
@@ -534,7 +532,7 @@ impl byte_text::StyleSheet for Theme {
     type Style = Text;
 
     fn appearance(&self, style: &Self::Style) -> byte_text::Appearance {
-        let color = <Theme as text::StyleSheet>::appearance(self, style.clone()).color;
+        let color = <Self as text::StyleSheet>::appearance(self, style.clone()).color;
         let selection_color = self.colors().accent.high_alpha;
 
         byte_text::Appearance {
@@ -599,7 +597,7 @@ pub enum ComboBox {
 impl From<ComboBox> for TextInput {
     fn from(combo_box: ComboBox) -> Self {
         match combo_box {
-            ComboBox::Default => TextInput::Default,
+            ComboBox::Default => Self::Default,
         }
     }
 }
@@ -607,7 +605,7 @@ impl From<ComboBox> for TextInput {
 impl From<ComboBox> for Menu {
     fn from(combo_box: ComboBox) -> Self {
         match combo_box {
-            ComboBox::Default => Menu::ComboBox,
+            ComboBox::Default => Self::ComboBox,
         }
     }
 }
