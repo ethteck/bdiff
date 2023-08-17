@@ -121,9 +121,38 @@ struct BDiff {
     theme: Theme,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Id(iced_core::widget::Id);
+
+impl Id {
+    /// Creates a custom [`Id`].
+    pub fn new(id: impl Into<std::borrow::Cow<'static, str>>) -> Self {
+        Self(iced_core::widget::Id::new(id))
+    }
+
+    /// Creates a unique [`Id`].
+    ///
+    /// This function produces a different [`Id`] every time it is called.
+    pub fn unique() -> Self {
+        Self(iced_core::widget::Id::unique())
+    }
+}
+
+impl Default for Id {
+    fn default() -> Self {
+        Id::unique()
+    }
+}
+
+impl From<Id> for iced_core::widget::Id {
+    fn from(id: Id) -> Self {
+        id.0
+    }
+}
+
 #[derive(Default)]
 struct HexView {
-    id: u32,
+    id: Id,
     file: BinFile,
     num_rows: u32,
     bytes_per_row: usize,
@@ -179,7 +208,7 @@ pub enum Message {
     FileReloaded(Result<BinFile, BDiffError>),
     EventOccurred(Event),
     CopySelection(Vec<(u32, String)>),
-    SelectionAdded(u32, u32),
+    SelectionAdded(Id, u32),
 }
 
 struct HexRow {
@@ -199,7 +228,7 @@ impl Application for BDiff {
         let min_rows = 10;
         let max_rows = 20;
 
-        for (i, path) in paths.iter().enumerate() {
+        for path in paths {
             let file = read_file(path.clone()).unwrap();
 
             let bytes_per_row = 0x10;
@@ -207,7 +236,7 @@ impl Application for BDiff {
             let num_rows = (file.data.len() / bytes_per_row).clamp(min_rows, max_rows) as u32;
 
             hex_views.push(HexView {
-                id: i as u32,
+                id: Id::unique(),
                 file,
                 num_rows,
                 bytes_per_row,
@@ -431,7 +460,7 @@ impl HexView {
 
                     let text_element = byte_text(
                         format!("{:02X?}", byte),
-                        self.id,
+                        self.id.clone(),
                         grid_pos as u32,
                         self.selection.contains(self.cur_pos + grid_pos),
                         Message::SelectionAdded,
@@ -466,7 +495,7 @@ impl HexView {
 
                     let text_element = byte_text(
                         ascii_char,
-                        self.id,
+                        self.id.clone(),
                         grid_pos as u32,
                         self.selection.contains(self.cur_pos + grid_pos),
                         Message::SelectionAdded,
