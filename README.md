@@ -1,5 +1,7 @@
 # bdiff
 
+## Notice: This branch is for an incomplete implementation I created in Iced. I'm leaving it around in case it's beneficial to others, but I've decided to try using egui for now and will see how that goes...
+
 A(nother) binary diff tool, targeted toward decompilation and modding projects.
 
 ![bdiff icon](/assets/icon.png)
