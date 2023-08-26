@@ -6,9 +6,10 @@ authors = ["Ethan Roseman <ethteck@gmail.com>"]
 license = "MIT"
 
 [dependencies]
+anyhow = "1.0.75"
 argh = "0.1.10"
+eframe = { version = "0.22.0", features = ["persistence"] }
 encoding_rs = "0.8.32"
-iced = { version = "0.10.0", features = ["image", "advanced"] }
-iced_core = "0.10.0"
+log = "0.4.20"
 notify = "6.0.1"
-palette = "0.7.2"
+rfd = "0.11.4"
