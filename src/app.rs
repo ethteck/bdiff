@@ -1,6 +1,9 @@
-use std::sync::atomic::Ordering;
+use std::{path::PathBuf, sync::atomic::Ordering};
 
-use eframe::egui::{self};
+use eframe::{
+    egui::{self},
+    epaint::{Rounding, Shadow},
+};
 
 use crate::{hex_view::HexView, read_file, BinFile};
 
@@ -15,44 +18,58 @@ impl BdiffApp {
 
         let mut hex_views = Vec::new();
         for file in files {
+            let num_rows = (file.data.len() / 0x10).clamp(10, 25) as u32;
+
             hex_views.push(HexView {
                 file,
-                num_rows: 25,
+                num_rows,
                 bytes_per_row: 0x10,
                 ..Default::default()
             });
         }
         Self { hex_views }
     }
-}
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum CursorState {
-    Hovering,
-    Pressed,
-    StillDown,
-    Released,
+    fn open_file(&mut self, path: PathBuf) {
+        let file: BinFile = read_file(path.clone()).unwrap();
+
+        self.hex_views.push(HexView::new(file));
+    }
 }
 
 fn setup_custom_fonts(ctx: &egui::Context) {
     // Start with the default fonts (we will be adding to them rather than replacing them).
     let mut fonts = egui::FontDefinitions::default();
 
-    let key = "inconsolata";
+    let monospace_key = "jetbrains-mono";
+    let string_key = "noto-sans-jp";
 
     fonts.font_data.insert(
-        key.to_owned(),
+        monospace_key.to_owned(),
         egui::FontData::from_static(include_bytes!(
-            "../assets/fonts/inconsolata/Inconsolata-VariableFont_wdth,wght.ttf"
+            "../assets/fonts/jetbrains/JetBrainsMonoNL-Regular.ttf"
         )),
     );
 
-    // Put custom font first (highest priority) for monospace text:
+    fonts.font_data.insert(
+        string_key.to_owned(),
+        egui::FontData::from_static(include_bytes!(
+            "../assets/fonts/noto/NotoSansJP-Regular.ttf"
+        )),
+    );
+
+    // Put custom fonts first (highest priority):
     fonts
         .families
         .entry(egui::FontFamily::Monospace)
         .or_default()
-        .insert(0, key.to_owned());
+        .insert(0, monospace_key.to_owned());
+
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .insert(0, string_key.to_owned());
 
     // Tell egui to use these fonts:
     ctx.set_fonts(fonts);
@@ -60,6 +77,14 @@ fn setup_custom_fonts(ctx: &egui::Context) {
 
 impl eframe::App for BdiffApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        let mut style: egui::Style = (*ctx.style()).clone();
+        style.visuals.popup_shadow = Shadow {
+            extrusion: 0.0,
+            color: egui::Color32::TRANSPARENT,
+        };
+        style.visuals.menu_rounding = Rounding::default();
+        ctx.set_style(style);
+
         let cursor_state: CursorState = ctx.input(|i| {
             if i.pointer.primary_pressed() {
                 CursorState::Pressed
@@ -125,12 +150,7 @@ impl eframe::App for BdiffApp {
                 ui.menu_button("File", |ui| {
                     if ui.button("Open").clicked() {
                         if let Some(path) = rfd::FileDialog::new().pick_file() {
-                            self.hex_views.push(HexView {
-                                file: read_file(path).unwrap(),
-                                num_rows: 25,
-                                bytes_per_row: 0x10,
-                                ..Default::default()
-                            });
+                            self.open_file(path);
                         }
                     }
                     if ui.button("Quit").clicked() {
@@ -157,4 +177,12 @@ impl eframe::App for BdiffApp {
             }
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CursorState {
+    Hovering,
+    Pressed,
+    StillDown,
+    Released,
 }

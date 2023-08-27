@@ -1,6 +1,6 @@
 mod app;
-mod error;
 mod hex_view;
+mod spacer;
 
 use std::{
     fs::File,
@@ -12,10 +12,10 @@ use std::{
     },
 };
 
+use anyhow::Error;
 use app::BdiffApp;
 use argh::FromArgs;
 use eframe::IconData;
-use error::BDiffError;
 use notify::Watcher;
 
 #[derive(FromArgs)]
@@ -35,16 +35,18 @@ pub struct BinFile {
 }
 
 impl BinFile {
-    pub fn reload(&mut self) -> Result<(), BDiffError> {
+    pub fn reload(&mut self) -> Result<(), Error> {
         self.data = read_file_bytes(self.path.clone())?;
         Ok(())
     }
 }
 
-pub fn read_file_bytes(path: PathBuf) -> Result<Vec<u8>, BDiffError> {
+pub fn read_file_bytes(path: PathBuf) -> Result<Vec<u8>, Error> {
     let file = match File::open(path.clone()) {
         Ok(file) => file,
-        Err(_error) => return Result::Err(BDiffError::IOError),
+        Err(_error) => {
+            return Err(Error::msg("Failed to open file"));
+        }
     };
 
     let mut buf_reader = BufReader::new(file);
@@ -52,7 +54,7 @@ pub fn read_file_bytes(path: PathBuf) -> Result<Vec<u8>, BDiffError> {
 
     let _ = buf_reader
         .read_to_end(&mut buffer)
-        .or(Err(BDiffError::IOError));
+        .or(Err(Error::msg("Failed to read file")));
 
     Ok(buffer)
 }
@@ -76,7 +78,7 @@ fn create_watcher(
     Ok(watcher)
 }
 
-fn read_file(path: PathBuf) -> Result<BinFile, BDiffError> {
+fn read_file(path: PathBuf) -> Result<BinFile, Error> {
     let data = match read_file_bytes(path.clone()) {
         Ok(data) => data,
         Err(e) => return Err(e),

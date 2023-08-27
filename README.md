@@ -4,7 +4,7 @@ A(nother) binary diff tool, targeted toward decompilation and modding projects.
 
 ![bdiff icon](/assets/icon.png)
 
-![image of bdiff UI](bdiff.png)
+![image of bdiff UI](screenshot.png)
 
 bdiff is currently in the very early stages of development. See the [issues](https://github.com/ethteck/bdiff/issues) for planned features.
 
