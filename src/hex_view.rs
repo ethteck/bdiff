@@ -1,14 +1,14 @@
-use std::{borrow::BorrowMut, ops::Deref};
-
+use anyhow::Error;
 use eframe::{
     egui::{self, Sense, Separator},
     epaint::Color32,
 };
-use encoding_rs::*;
 
-use crate::app::CursorState;
-use crate::spacer::Spacer;
-use crate::BinFile;
+use crate::{
+    app::CursorState, bin_file::read_file_bytes, data_viewer::DataViewer,
+    string_viewer::StringViewer,
+};
+use crate::{bin_file::BinFile, spacer::Spacer};
 
 #[derive(Default, Debug, PartialEq)]
 enum HexViewSelectionState {
@@ -64,21 +64,26 @@ impl HexViewSelection {
 
 #[derive(Default)]
 pub struct HexView {
+    pub id: usize,
     pub file: BinFile,
     pub num_rows: u32,
     pub bytes_per_row: usize,
     pub cur_pos: usize,
+    pub locked: bool,
     pub selection: HexViewSelection,
+    sv: StringViewer,
+    dv: DataViewer,
 }
 
 impl HexView {
-    pub fn new(file: BinFile) -> Self {
+    pub fn new(file: BinFile, id: usize) -> Self {
         let min_rows = 10;
         let max_rows = 25;
         let default_bytes_per_row = 0x10;
         let num_rows = (file.data.len() / default_bytes_per_row).clamp(min_rows, max_rows) as u32;
 
         Self {
+            id,
             file,
             num_rows,
             bytes_per_row: default_bytes_per_row,
@@ -90,9 +95,9 @@ impl HexView {
         self.cur_pos = val.clamp(0, self.file.data.len() - 0x8);
     }
 
-    pub fn adjust_cur_pos(&mut self, delta: i32) {
+    pub fn adjust_cur_pos(&mut self, delta: isize) {
         self.cur_pos =
-            (self.cur_pos as i32 + delta).clamp(0, self.file.data.len() as i32 - 0x8) as usize;
+            (self.cur_pos as isize + delta).clamp(0, self.file.data.len() as isize - 0x8) as usize;
     }
 
     pub fn bytes_per_screen(&self) -> usize {
@@ -115,7 +120,21 @@ impl HexView {
         }
     }
 
-    fn render_hex_grid(
+    pub fn reload_file(&mut self) -> Result<(), Error> {
+        self.file.data = read_file_bytes(self.file.path.clone())?;
+
+        if self.selection.first >= self.file.data.len()
+            && self.selection.second >= self.file.data.len()
+        {
+            self.selection.clear();
+        } else {
+            self.selection.first = self.selection.first.min(self.file.data.len() - 1);
+            self.selection.second = self.selection.second.min(self.file.data.len() - 1);
+        }
+        Ok(())
+    }
+
+    fn show_hex_grid(
         &mut self,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
@@ -123,7 +142,7 @@ impl HexView {
         font_size: f32,
     ) {
         ui.group(|ui| {
-            egui::Grid::new("hex_grid")
+            egui::Grid::new(format!("hex_grid{}", self.id))
                 .striped(true)
                 .spacing([0.0, 0.0])
                 .min_col_width(0.0)
@@ -138,8 +157,12 @@ impl HexView {
                     while r < self.num_rows {
                         let row = row_chunks.next().unwrap_or_default();
 
-                        // offset
-                        let num_digits = 8; // 8 of those boys
+                        let num_digits = match self.file.data.len() {
+                            0..=0xFFFF => 4,
+                            0x1000000..=0xFFFFFFFF => 8,
+                            0x10000000000..=0xFFFFFFFFFFFF => 12,
+                            _ => 8,
+                        };
                         let mut i = num_digits;
                         let mut offset_leading_zeros = true;
 
@@ -236,6 +259,10 @@ impl HexView {
                                         }
                                     }
                                 }
+
+                                if res.middle_clicked() {
+                                    self.selection.clear();
+                                }
                             }
 
                             if i < self.bytes_per_row - 1 {
@@ -327,205 +354,71 @@ impl HexView {
 
     pub fn show(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, cursor_state: CursorState) {
         let font_size = 14.0;
-        let file_name = self.file.path.as_path().to_str().unwrap();
-        ui.label(
-            egui::RichText::new(file_name)
-                .monospace()
-                .size(font_size)
-                .color(Color32::LIGHT_GRAY),
-        );
-        ui.with_layout(
-            egui::Layout::left_to_right(eframe::emath::Align::Min),
-            |ui: &mut egui::Ui| {
-                ui.vertical(|ui| {
-                    self.render_hex_grid(ctx, ui, cursor_state, font_size);
-                    ui.group(|ui| {
-                        ui.add(egui::Label::new(
-                            egui::RichText::new("String Viewer").monospace(),
-                        ));
 
-                        egui::Grid::new("string_grid")
-                            .striped(true)
-                            .num_columns(2)
-                            .show(ui, |ui| {
-                                let selected_bytes = self.get_selected_bytes();
+        ui.group(|ui| {
+            let file_name = self.file.path.as_path().to_str().unwrap();
 
-                                ui.add(egui::Label::new(egui::RichText::new("UTF-8").monospace()));
-                                ui.text_edit_singleline(
-                                    &mut String::from_utf8(selected_bytes.clone())
-                                        .unwrap_or_default(),
-                                );
-                                ui.end_row();
+            ui.label(
+                egui::RichText::new(file_name)
+                    .monospace()
+                    .size(font_size)
+                    .color(Color32::LIGHT_GRAY),
+            );
 
-                                ui.add(egui::Label::new(egui::RichText::new("UTF-16").monospace()));
-                                ui.text_edit_singleline(
-                                    &mut UTF_16BE
-                                        .decode_without_bom_handling_and_without_replacement(
-                                            &selected_bytes,
-                                        )
-                                        .unwrap_or_default()
-                                        .to_string(),
-                                );
-                                ui.end_row();
+            ui.with_layout(
+                egui::Layout::left_to_right(eframe::emath::Align::Min),
+                |ui| {
+                    if ui
+                        .small_button("strings")
+                        .on_hover_text(match self.sv.show {
+                            true => "Hide String Viewer",
+                            false => "Show String Viewer",
+                        })
+                        .clicked()
+                    {
+                        self.sv.show = !self.sv.show;
+                    };
 
-                                ui.add(egui::Label::new(egui::RichText::new("EUC-JP").monospace()));
-                                ui.text_edit_singleline(
-                                    &mut EUC_JP
-                                        .decode_without_bom_handling_and_without_replacement(
-                                            &selected_bytes,
-                                        )
-                                        .unwrap_or_default()
-                                        .to_string(),
-                                );
-                                ui.end_row();
+                    if ui
+                        .small_button("data")
+                        .on_hover_text(match self.dv.show {
+                            true => "Hide Data Viewer",
+                            false => "Show Data Viewer",
+                        })
+                        .clicked()
+                    {
+                        self.dv.show = !self.dv.show;
+                    };
+                },
+            );
 
-                                ui.add(egui::Label::new(
-                                    egui::RichText::new("Shift JIS").monospace(),
-                                ));
-                                ui.text_edit_singleline(
-                                    &mut SHIFT_JIS
-                                        .decode_without_bom_handling_and_without_replacement(
-                                            &selected_bytes,
-                                        )
-                                        .unwrap_or_default()
-                                        .to_string(),
-                                );
-                                ui.end_row();
-                            });
-                    });
-                });
-                ui.group(|ui| {
+            ui.with_layout(
+                egui::Layout::left_to_right(eframe::emath::Align::Min),
+                |ui: &mut egui::Ui| {
                     ui.vertical(|ui| {
-                        ui.add(egui::Label::new(
-                            egui::RichText::new("Selection Info").monospace(),
-                        ));
+                        self.show_hex_grid(ctx, ui, cursor_state, font_size);
 
-                        let start: String = match self.selection.state {
-                            HexViewSelectionState::None => "".to_owned(),
-                            _ => format!("0x{:X}", self.selection.start()),
-                        };
-                        let end: String = match self.selection.state {
-                            HexViewSelectionState::None => "".to_owned(),
-                            _ => format!("0x{:X}", self.selection.end()),
-                        };
-                        let length: String = match self.selection.state {
-                            HexViewSelectionState::None => "".to_owned(),
+                        self.sv.display(ui, self.id, self.get_selected_bytes());
+
+                        let selection_text = match self.selection.state {
+                            HexViewSelectionState::None => "No selection".to_owned(),
                             _ => {
-                                format!("0x{:X}", self.selection.end() - self.selection.start() + 1)
+                                let start = self.selection.start();
+                                let end = self.selection.end();
+                                let length = end - start + 1;
+
+                                format!(
+                                    "Selection: 0x{:X} - 0x{:X} (len 0x{:X})",
+                                    start, end, length
+                                )
                             }
                         };
-
-                        egui::Grid::new("hex_grid_selection")
-                            .striped(true)
-                            .num_columns(2)
-                            .show(ui, |ui| {
-                                ui.add(egui::Label::new(egui::RichText::new("start").monospace()));
-                                ui.add(egui::Label::new(egui::RichText::new(start).monospace()));
-                                ui.end_row();
-
-                                ui.add(egui::Label::new(egui::RichText::new("end").monospace()));
-                                ui.add(egui::Label::new(egui::RichText::new(end).monospace()));
-                                ui.end_row();
-
-                                ui.add(egui::Label::new(egui::RichText::new("length").monospace()));
-                                ui.add(egui::Label::new(egui::RichText::new(length).monospace()));
-                                ui.end_row();
-
-                                let mut buffer = dtoa::Buffer::new();
-
-                                let selected_bytes = self.get_selected_bytes();
-                                let selection_len = selected_bytes.len();
-
-                                if selection_len >= 1 {
-                                    let bytes = selected_bytes[0..1].try_into().unwrap_or_default();
-
-                                    self.selection_data_row(
-                                        ui,
-                                        "s8",
-                                        format!("{:}", i8::from_be_bytes(bytes)),
-                                    );
-
-                                    self.selection_data_row(
-                                        ui,
-                                        "u8",
-                                        format!("{:}", u8::from_be_bytes(bytes)),
-                                    );
-                                }
-
-                                if selection_len >= 2 {
-                                    let bytes = selected_bytes[0..2].try_into().unwrap_or_default();
-
-                                    self.selection_data_row(
-                                        ui,
-                                        "s16",
-                                        format!("{:}", i16::from_be_bytes(bytes)),
-                                    );
-
-                                    self.selection_data_row(
-                                        ui,
-                                        "u16",
-                                        format!("{:}", u16::from_be_bytes(bytes)),
-                                    );
-                                }
-
-                                if selection_len >= 4 {
-                                    let bytes = selected_bytes[0..4].try_into().unwrap_or_default();
-
-                                    self.selection_data_row(
-                                        ui,
-                                        "s32",
-                                        format!("{:}", i32::from_be_bytes(bytes)),
-                                    );
-
-                                    self.selection_data_row(
-                                        ui,
-                                        "u32",
-                                        format!("{:}", u32::from_be_bytes(bytes)),
-                                    );
-
-                                    self.selection_data_row(
-                                        ui,
-                                        "f32",
-                                        buffer.format(f32::from_be_bytes(bytes)),
-                                    );
-                                }
-
-                                if selection_len >= 8 {
-                                    let bytes = selected_bytes[0..8].try_into().unwrap_or_default();
-
-                                    self.selection_data_row(
-                                        ui,
-                                        "s64",
-                                        format!("{:}", i64::from_be_bytes(bytes)),
-                                    );
-
-                                    self.selection_data_row(
-                                        ui,
-                                        "u64",
-                                        format!("{:}", u64::from_be_bytes(bytes)),
-                                    );
-
-                                    self.selection_data_row(
-                                        ui,
-                                        "f64",
-                                        buffer.format(f64::from_be_bytes(bytes)),
-                                    );
-                                }
-                            });
+                        ui.label(egui::RichText::new(selection_text).monospace());
                     });
-                });
-            },
-        );
-    }
 
-    fn selection_data_row(
-        &self,
-        ui: &mut egui::Ui,
-        name: impl Into<String>,
-        data: impl Into<String>,
-    ) {
-        ui.add(egui::Label::new(egui::RichText::new(name).monospace()));
-        ui.add(egui::Label::new(egui::RichText::new(data).monospace()));
-        ui.end_row();
+                    self.dv.display(ui, self.id, self.get_selected_bytes());
+                },
+            );
+        });
     }
 }

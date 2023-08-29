@@ -5,35 +5,40 @@ use eframe::{
     epaint::{Rounding, Shadow},
 };
 
-use crate::{hex_view::HexView, read_file, BinFile};
+use crate::{
+    bin_file::{read_file, BinFile},
+    hex_view::HexView,
+};
 
 #[derive(Default)]
 pub struct BdiffApp {
+    hex_view_id: usize,
     hex_views: Vec<HexView>,
 }
 
 impl BdiffApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, files: Vec<BinFile>) -> Self {
+    pub fn new(cc: &eframe::CreationContext<'_>, paths: Vec<PathBuf>) -> Self {
         setup_custom_fonts(&cc.egui_ctx);
 
-        let mut hex_views = Vec::new();
-        for file in files {
-            let num_rows = (file.data.len() / 0x10).clamp(10, 25) as u32;
+        let hex_views = Vec::new();
 
-            hex_views.push(HexView {
-                file,
-                num_rows,
-                bytes_per_row: 0x10,
-                ..Default::default()
-            });
+        let mut ret = Self {
+            hex_view_id: 0,
+            hex_views,
+        };
+
+        for path in paths {
+            ret.open_file(path);
         }
-        Self { hex_views }
+
+        ret
     }
 
     fn open_file(&mut self, path: PathBuf) {
         let file: BinFile = read_file(path.clone()).unwrap();
 
-        self.hex_views.push(HexView::new(file));
+        self.hex_views.push(HexView::new(file, self.hex_view_id));
+        self.hex_view_id += 1;
     }
 }
 
@@ -97,53 +102,48 @@ impl eframe::App for BdiffApp {
             }
         });
 
-        // TODO don't hard-code the 0th hex_view
-        let target_hv = &mut self.hex_views[0];
+        for hv in self.hex_views.iter_mut() {
+            if !hv.locked {
+                ctx.input(|i| {
+                    // Keys
+                    if i.key_pressed(egui::Key::Home) {
+                        hv.set_cur_pos(0);
+                    }
+                    if i.key_pressed(egui::Key::End) && hv.file.data.len() >= hv.bytes_per_screen()
+                    {
+                        hv.set_cur_pos(hv.file.data.len() - hv.bytes_per_screen())
+                    }
+                    if i.key_pressed(egui::Key::PageUp) {
+                        hv.adjust_cur_pos(-(hv.bytes_per_screen() as isize))
+                    }
+                    if i.key_pressed(egui::Key::PageDown) {
+                        hv.adjust_cur_pos(hv.bytes_per_screen() as isize)
+                    }
+                    if i.key_pressed(egui::Key::ArrowLeft) {
+                        hv.adjust_cur_pos(-1)
+                    }
+                    if i.key_pressed(egui::Key::ArrowRight) {
+                        hv.adjust_cur_pos(1)
+                    }
+                    if i.key_pressed(egui::Key::ArrowUp) {
+                        hv.adjust_cur_pos(-(hv.bytes_per_row as isize))
+                    }
+                    if i.key_pressed(egui::Key::ArrowDown) {
+                        hv.adjust_cur_pos(hv.bytes_per_row as isize)
+                    }
+                    if i.key_pressed(egui::Key::Enter) {
+                        hv.adjust_cur_pos(hv.bytes_per_screen() as isize)
+                    }
 
-        ctx.input(|i| {
-            // Keys
-            if i.key_pressed(egui::Key::Home) {
-                target_hv.set_cur_pos(0);
+                    // Mouse
+                    if i.scroll_delta.y != 0.0 {
+                        let scroll_amt = -(i.scroll_delta.y as isize / 50);
+                        let lines_per_scroll = 1;
+                        hv.adjust_cur_pos(scroll_amt * lines_per_scroll * hv.bytes_per_row as isize)
+                    }
+                });
             }
-            if i.key_pressed(egui::Key::End)
-                && target_hv.file.data.len() >= target_hv.bytes_per_screen()
-            {
-                target_hv.set_cur_pos(target_hv.file.data.len() - target_hv.bytes_per_screen())
-            }
-            if i.key_pressed(egui::Key::PageUp) {
-                target_hv.adjust_cur_pos(-(target_hv.bytes_per_screen() as i32))
-            }
-            if i.key_pressed(egui::Key::PageDown) {
-                target_hv.adjust_cur_pos(target_hv.bytes_per_screen() as i32)
-            }
-            if i.key_pressed(egui::Key::ArrowLeft) {
-                target_hv.adjust_cur_pos(-1)
-            }
-            if i.key_pressed(egui::Key::ArrowRight) {
-                target_hv.adjust_cur_pos(1)
-            }
-            if i.key_pressed(egui::Key::ArrowUp) {
-                target_hv.adjust_cur_pos(-(target_hv.bytes_per_row as i32))
-            }
-            if i.key_pressed(egui::Key::ArrowDown) {
-                target_hv.adjust_cur_pos(target_hv.bytes_per_row as i32)
-            }
-            if i.key_pressed(egui::Key::Enter) {
-                target_hv.adjust_cur_pos(target_hv.bytes_per_screen() as i32)
-            }
-
-            // Mouse
-            if i.scroll_delta.y != 0.0 {
-                let scroll_amt = -(i.scroll_delta.y as i32 / 50);
-                let lines_per_scroll = 1;
-                target_hv
-                    .adjust_cur_pos(scroll_amt * lines_per_scroll * target_hv.bytes_per_row as i32)
-            }
-
-            if i.pointer.middle_down() {
-                target_hv.selection.clear();
-            }
-        });
+        }
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
@@ -173,7 +173,7 @@ impl eframe::App for BdiffApp {
 
         for hv in self.hex_views.iter_mut() {
             if hv.file.modified.swap(false, Ordering::Relaxed) {
-                let _ = hv.file.reload();
+                let _ = hv.reload_file();
             }
         }
     }
