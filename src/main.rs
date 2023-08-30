@@ -2,8 +2,11 @@ mod app;
 mod bin_file;
 mod data_viewer;
 mod hex_view;
+mod map_file;
+mod map_tool;
 mod spacer;
 mod string_viewer;
+mod watcher;
 
 use std::path::PathBuf;
 

@@ -5,14 +5,11 @@ use eframe::{
     epaint::{Rounding, Shadow},
 };
 
-use crate::{
-    bin_file::{read_file, BinFile},
-    hex_view::HexView,
-};
+use crate::{bin_file::BinFile, hex_view::HexView};
 
 #[derive(Default)]
 pub struct BdiffApp {
-    hex_view_id: usize,
+    next_hv_id: usize,
     hex_views: Vec<HexView>,
 }
 
@@ -23,7 +20,7 @@ impl BdiffApp {
         let hex_views = Vec::new();
 
         let mut ret = Self {
-            hex_view_id: 0,
+            next_hv_id: 0,
             hex_views,
         };
 
@@ -35,10 +32,10 @@ impl BdiffApp {
     }
 
     fn open_file(&mut self, path: PathBuf) {
-        let file: BinFile = read_file(path.clone()).unwrap();
+        let file = BinFile::from_path(path.clone()).unwrap();
 
-        self.hex_views.push(HexView::new(file, self.hex_view_id));
-        self.hex_view_id += 1;
+        self.hex_views.push(HexView::new(file, self.next_hv_id));
+        self.next_hv_id += 1;
     }
 }
 
@@ -80,6 +77,14 @@ fn setup_custom_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CursorState {
+    Hovering,
+    Pressed,
+    StillDown,
+    Released,
+}
+
 impl eframe::App for BdiffApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         let mut style: egui::Style = (*ctx.style()).clone();
@@ -103,7 +108,7 @@ impl eframe::App for BdiffApp {
         });
 
         for hv in self.hex_views.iter_mut() {
-            if !hv.locked {
+            if !hv.pos_locked {
                 ctx.input(|i| {
                     // Keys
                     if i.key_pressed(egui::Key::Home) {
@@ -152,6 +157,7 @@ impl eframe::App for BdiffApp {
                         if let Some(path) = rfd::FileDialog::new().pick_file() {
                             self.open_file(path);
                         }
+                        ui.close_menu();
                     }
                     if ui.button("Quit").clicked() {
                         frame.close();
@@ -169,20 +175,24 @@ impl eframe::App for BdiffApp {
             for hv in self.hex_views.iter_mut() {
                 hv.show(ctx, ui, cursor_state);
             }
+
+            self.hex_views.retain(|hv| {
+                let delete: bool = { hv.closed };
+                !delete
+            })
         });
 
         for hv in self.hex_views.iter_mut() {
             if hv.file.modified.swap(false, Ordering::Relaxed) {
                 let _ = hv.reload_file();
             }
+
+            if hv.mt.map_file.is_some() {
+                let map_file = hv.mt.map_file.as_mut().unwrap();
+                if map_file.modified.swap(false, Ordering::Relaxed) {
+                    let _ = map_file.reload();
+                }
+            }
         }
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum CursorState {
-    Hovering,
-    Pressed,
-    StillDown,
-    Released,
 }
