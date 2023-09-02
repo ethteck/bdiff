@@ -32,6 +32,29 @@ impl Default for DataViewer {
     }
 }
 
+fn display_type(
+    ui: &mut egui::Ui,
+    bytes: &[u8],
+    enabled: bool,
+    name: impl Into<String>,
+    size: usize,
+    func: impl FnMut(&[u8]) -> String,
+    delimiter: &str,
+) {
+    if enabled {
+        ui.add(egui::Label::new(egui::RichText::new(name).monospace()));
+        let mut data = bytes
+            .chunks_exact(size)
+            .take(100) // prevent too many snibblets
+            .map(func)
+            .collect::<Vec<String>>()
+            .join(delimiter);
+
+        ui.text_edit_singleline(&mut data);
+        ui.end_row();
+    }
+}
+
 impl DataViewer {
     pub fn display(&mut self, ui: &mut egui::Ui, hv_id: usize, selected_bytes: Vec<u8>) {
         if !self.show {
@@ -65,186 +88,161 @@ impl DataViewer {
                 egui::Grid::new(format!("hex_grid_selection{}", hv_id))
                     .striped(true)
                     .num_columns(2)
-                    .show(ui, |ui| {
-                        let mut float_buffer = dtoa::Buffer::new();
-
-                        let selection_len = selected_bytes.len();
-
-                        if self.s8 {
-                            self.selection_data_row(
-                                ui,
-                                "s8",
-                                if selection_len >= 1 {
-                                    format!(
-                                        "{:}",
-                                        i8::from_be_bytes(
-                                            selected_bytes[0..1].try_into().unwrap_or_default(),
-                                        )
-                                    )
-                                } else {
-                                    "".to_owned()
-                                },
-                            );
-                        }
-
-                        if self.u8 {
-                            self.selection_data_row(
-                                ui,
-                                "u8",
-                                if selection_len >= 1 {
-                                    format!(
-                                        "{:}",
-                                        u8::from_be_bytes(
-                                            selected_bytes[0..1].try_into().unwrap_or_default(),
-                                        )
-                                    )
-                                } else {
-                                    "".to_owned()
-                                },
-                            );
-                        }
-
-                        if self.s16 {
-                            self.selection_data_row(
-                                ui,
-                                "s16",
-                                if selection_len >= 2 {
-                                    format!(
-                                        "{:}",
-                                        i16::from_be_bytes(
-                                            selected_bytes[0..2].try_into().unwrap_or_default(),
-                                        )
-                                    )
-                                } else {
-                                    "".to_owned()
-                                },
-                            );
-                        }
-
-                        if self.u16 {
-                            self.selection_data_row(
-                                ui,
-                                "u16",
-                                if selection_len >= 2 {
-                                    format!(
-                                        "{:}",
-                                        u16::from_be_bytes(
-                                            selected_bytes[0..2].try_into().unwrap_or_default(),
-                                        )
-                                    )
-                                } else {
-                                    "".to_owned()
-                                },
-                            );
-                        }
-
-                        if self.s32 {
-                            self.selection_data_row(
-                                ui,
-                                "s32",
-                                if selection_len >= 4 {
-                                    format!(
-                                        "{:}",
-                                        i32::from_be_bytes(
-                                            selected_bytes[0..4].try_into().unwrap_or_default(),
-                                        )
-                                    )
-                                } else {
-                                    "".to_owned()
-                                },
-                            );
-                        }
-
-                        if self.u32 {
-                            self.selection_data_row(
-                                ui,
-                                "u32",
-                                if selection_len >= 4 {
-                                    format!(
-                                        "{:}",
-                                        u32::from_be_bytes(
-                                            selected_bytes[0..4].try_into().unwrap_or_default(),
-                                        )
-                                    )
-                                } else {
-                                    "".to_owned()
-                                },
-                            );
-                        }
-
-                        if self.f32 {
-                            self.selection_data_row(
-                                ui,
-                                "f32",
-                                if selection_len >= 4 {
-                                    float_buffer
-                                        .format(f32::from_be_bytes(
-                                            selected_bytes[0..4].try_into().unwrap_or_default(),
-                                        ))
-                                        .to_string()
-                                } else {
-                                    "".to_owned()
-                                },
-                            );
-                        }
-
-                        if self.s64 {
-                            self.selection_data_row(
-                                ui,
-                                "s64",
-                                if selection_len >= 8 {
-                                    format!(
-                                        "{:}",
-                                        i64::from_be_bytes(
-                                            selected_bytes[0..8].try_into().unwrap_or_default(),
-                                        )
-                                    )
-                                } else {
-                                    "".to_owned()
-                                },
-                            );
-                        }
-
-                        if self.u64 {
-                            self.selection_data_row(
-                                ui,
-                                "u64",
-                                if selection_len >= 8 {
-                                    format!(
-                                        "{:}",
-                                        u64::from_be_bytes(
-                                            selected_bytes[0..8].try_into().unwrap_or_default(),
-                                        )
-                                    )
-                                } else {
-                                    "".to_owned()
-                                },
-                            );
-                        }
-
-                        if self.f64 {
-                            self.selection_data_row(
-                                ui,
-                                "f64",
-                                if selection_len >= 8 {
-                                    float_buffer
-                                        .format(f64::from_be_bytes(
-                                            selected_bytes[0..8].try_into().unwrap_or_default(),
-                                        ))
-                                        .to_string()
-                                } else {
-                                    "".to_owned()
-                                },
-                            );
-                        }
-                    });
+                    .show(ui, |ui| self.display_data_types(ui, selected_bytes));
             });
         });
     }
 
-    fn selection_data_row(&self, ui: &mut egui::Ui, name: impl Into<String>, mut data: String) {
-        ui.add(egui::Label::new(egui::RichText::new(name).monospace()));
-        ui.text_edit_singleline(&mut data);
-        ui.end_row();
+    fn display_data_types(&mut self, ui: &mut egui::Ui, selected_bytes: Vec<u8>) {
+        let mut float_buffer = dtoa::Buffer::new();
+        let delimiter = ", ";
+
+        display_type(
+            ui,
+            &selected_bytes,
+            self.s8,
+            "s8",
+            1,
+            |chunk| {
+                format!(
+                    "{:}",
+                    i8::from_be_bytes(chunk.try_into().unwrap_or_default())
+                )
+            },
+            delimiter,
+        );
+
+        display_type(
+            ui,
+            &selected_bytes,
+            self.u8,
+            "u8",
+            1,
+            |chunk| {
+                format!(
+                    "{:}",
+                    u8::from_be_bytes(chunk.try_into().unwrap_or_default())
+                )
+            },
+            delimiter,
+        );
+
+        display_type(
+            ui,
+            &selected_bytes,
+            self.s16,
+            "s16",
+            2,
+            |chunk| {
+                format!(
+                    "{:}",
+                    i16::from_be_bytes(chunk.try_into().unwrap_or_default())
+                )
+            },
+            delimiter,
+        );
+
+        display_type(
+            ui,
+            &selected_bytes,
+            self.u16,
+            "u16",
+            2,
+            |chunk| {
+                format!(
+                    "{:}",
+                    u16::from_be_bytes(chunk.try_into().unwrap_or_default())
+                )
+            },
+            delimiter,
+        );
+
+        display_type(
+            ui,
+            &selected_bytes,
+            self.s32,
+            "s32",
+            4,
+            |chunk| {
+                format!(
+                    "{:}",
+                    i32::from_be_bytes(chunk.try_into().unwrap_or_default())
+                )
+            },
+            delimiter,
+        );
+
+        display_type(
+            ui,
+            &selected_bytes,
+            self.u32,
+            "u32",
+            4,
+            |chunk| {
+                format!(
+                    "{:}",
+                    u32::from_be_bytes(chunk.try_into().unwrap_or_default())
+                )
+            },
+            delimiter,
+        );
+
+        display_type(
+            ui,
+            &selected_bytes,
+            self.f32,
+            "f32",
+            4,
+            |chunk| {
+                float_buffer
+                    .format(f32::from_be_bytes(chunk.try_into().unwrap_or_default()))
+                    .to_string()
+            },
+            delimiter,
+        );
+
+        display_type(
+            ui,
+            &selected_bytes,
+            self.s64,
+            "s64",
+            8,
+            |chunk| {
+                format!(
+                    "{:}",
+                    i64::from_be_bytes(chunk.try_into().unwrap_or_default())
+                )
+            },
+            delimiter,
+        );
+
+        display_type(
+            ui,
+            &selected_bytes,
+            self.u64,
+            "u64",
+            8,
+            |chunk| {
+                format!(
+                    "{:}",
+                    u64::from_be_bytes(chunk.try_into().unwrap_or_default())
+                )
+            },
+            delimiter,
+        );
+
+        display_type(
+            ui,
+            &selected_bytes,
+            self.f64,
+            "f64",
+            8,
+            |chunk| {
+                float_buffer
+                    .format(f64::from_be_bytes(chunk.try_into().unwrap_or_default()))
+                    .to_string()
+            },
+            delimiter,
+        );
     }
 }

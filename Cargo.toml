@@ -10,6 +10,7 @@ anyhow = "1.0.75"
 argh = "0.1.10"
 dtoa = "1.0.9"
 eframe = { version = "0.22.0", features = ["persistence"] }
+egui_dock = "0.6.3"
 encoding_rs = "0.8.32"
 iset = "0.2.2"
 log = "0.4.20"

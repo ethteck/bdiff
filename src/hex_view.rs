@@ -402,44 +402,6 @@ impl HexView {
                 },
             );
 
-            // ui.with_layout(
-            //     egui::Layout::left_to_right(eframe::emath::Align::Min),
-            //     |ui| {
-            //         if ui
-            //             .small_button("strings")
-            //             .on_hover_text(match self.sv.show {
-            //                 true => "Hide String Viewer",
-            //                 false => "Show String Viewer",
-            //             })
-            //             .clicked()
-            //         {
-            //             self.sv.show = !self.sv.show;
-            //         };
-
-            //         if ui
-            //             .small_button("data")
-            //             .on_hover_text(match self.dv.show {
-            //                 true => "Hide Data Viewer",
-            //                 false => "Show Data Viewer",
-            //             })
-            //             .clicked()
-            //         {
-            //             self.dv.show = !self.dv.show;
-            //         };
-
-            //         if ui
-            //             .small_button(".map")
-            //             .on_hover_text(match self.mt.show {
-            //                 true => "Hide Map Tool",
-            //                 false => "Show Map Tool",
-            //             })
-            //             .clicked()
-            //         {
-            //             self.mt.show = !self.mt.show;
-            //         }
-            //     },
-            // );
-
             ui.with_layout(
                 egui::Layout::left_to_right(eframe::emath::Align::Min),
                 |ui: &mut egui::Ui| {
