@@ -239,46 +239,18 @@ impl HexView {
                                 let res = ui.add(hex_label);
 
                                 if byte.is_some() {
-                                    if let Some(cursor_pos) = ctx.input(|i| i.pointer.hover_pos()) {
-                                        if res.rect.contains(cursor_pos) {
-                                            match cursor_state {
-                                                CursorState::Pressed => {
-                                                    self.selection.begin(row_current_pos);
-                                                }
-                                                CursorState::StillDown => {
-                                                    match self.selection.state {
-                                                        HexViewSelectionState::None => {
-                                                            self.selection.begin(row_current_pos);
-                                                        }
-                                                        HexViewSelectionState::Selecting => {
-                                                            self.selection.update(row_current_pos);
-                                                        }
-                                                        _ => (),
-                                                    }
-                                                }
-                                                CursorState::Released => {
-                                                    if self.selection.state
-                                                        == HexViewSelectionState::Selecting
-                                                    {
-                                                        self.selection.finalize(row_current_pos);
-                                                    }
-                                                }
-                                                _ => {}
-                                            }
-
-                                            self.cursor_pos = Some(row_current_pos);
-                                        }
-                                    }
-
-                                    if res.middle_clicked() {
-                                        self.selection.clear();
-                                    }
+                                    self.handle_interactivity(
+                                        res,
+                                        cursor_state,
+                                        row_current_pos,
+                                        ctx,
+                                    );
                                 }
+                                i += 1;
 
                                 if i < self.bytes_per_row - 1 {
                                     ui.add(Spacer::default().spacing_x(4.0));
                                 }
-                                i += 1;
                             }
 
                             ui.add(Spacer::default().spacing_x(8.0));
@@ -321,37 +293,12 @@ impl HexView {
                                 ui.add(Spacer::default().spacing_x(1.0));
 
                                 if byte.is_some() {
-                                    if let Some(cursor_pos) = ctx.input(|i| i.pointer.hover_pos()) {
-                                        if res.rect.contains(cursor_pos) {
-                                            match cursor_state {
-                                                CursorState::Pressed => {
-                                                    self.selection.first = row_current_pos;
-                                                    self.selection.second = row_current_pos;
-                                                    self.selection.state =
-                                                        HexViewSelectionState::Selecting;
-                                                }
-                                                CursorState::StillDown => {
-                                                    if self.selection.state
-                                                        == HexViewSelectionState::Selecting
-                                                    {
-                                                        self.selection.second = row_current_pos;
-                                                    }
-                                                }
-                                                CursorState::Released => {
-                                                    if self.selection.state
-                                                        == HexViewSelectionState::Selecting
-                                                    {
-                                                        self.selection.second = row_current_pos;
-                                                        self.selection.state =
-                                                            HexViewSelectionState::Selected;
-                                                    }
-                                                }
-                                                _ => {}
-                                            }
-
-                                            self.cursor_pos = Some(row_current_pos);
-                                        }
-                                    }
+                                    self.handle_interactivity(
+                                        res,
+                                        cursor_state,
+                                        row_current_pos,
+                                        ctx,
+                                    );
                                 }
                                 i += 1;
                             }
@@ -369,6 +316,44 @@ impl HexView {
             if !grid_rect.contains(cursor_pos) {
                 self.cursor_pos = None;
             }
+        }
+    }
+
+    fn handle_interactivity(
+        &mut self,
+        res: egui::Response,
+        cursor_state: CursorState,
+        row_current_pos: usize,
+        ctx: &egui::Context,
+    ) {
+        if res.hovered() {
+            if cursor_state == CursorState::Pressed {
+                self.selection.begin(row_current_pos);
+            }
+
+            self.cursor_pos = Some(row_current_pos);
+        }
+
+        if let Some(cursor_pos) = ctx.input(|i| i.pointer.hover_pos()) {
+            if res.rect.contains(cursor_pos) {
+                match cursor_state {
+                    CursorState::StillDown => {
+                        if self.selection.state == HexViewSelectionState::Selecting {
+                            self.selection.update(row_current_pos);
+                        }
+                    }
+                    CursorState::Released => {
+                        if self.selection.state == HexViewSelectionState::Selecting {
+                            self.selection.finalize(row_current_pos);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if res.middle_clicked() {
+            self.selection.clear();
         }
     }
 
