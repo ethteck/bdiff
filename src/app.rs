@@ -2,15 +2,24 @@ use std::{path::PathBuf, sync::atomic::Ordering};
 
 use eframe::{
     egui::{self},
-    epaint::{Rounding, Shadow},
+    epaint::{Color32, Rounding, Shadow},
 };
 
+use egui_modal::Modal;
+
 use crate::{bin_file::BinFile, hex_view::HexView};
+
+#[derive(Default)]
+struct GotoModal {
+    value: String,
+    status: String,
+}
 
 #[derive(Default)]
 pub struct BdiffApp {
     next_hv_id: usize,
     hex_views: Vec<HexView>,
+    goto_modal: GotoModal,
 }
 
 impl BdiffApp {
@@ -22,6 +31,7 @@ impl BdiffApp {
         let mut ret = Self {
             next_hv_id: 0,
             hex_views,
+            ..Default::default()
         };
 
         for path in paths {
@@ -107,49 +117,72 @@ impl eframe::App for BdiffApp {
             }
         });
 
-        for hv in self.hex_views.iter_mut() {
-            if !hv.pos_locked {
-                ctx.input(|i| {
-                    // Keys
-                    if i.key_pressed(egui::Key::Home) {
-                        hv.set_cur_pos(0);
-                    }
-                    if i.key_pressed(egui::Key::End) && hv.file.data.len() >= hv.bytes_per_screen()
-                    {
-                        hv.set_cur_pos(hv.file.data.len() - hv.bytes_per_screen())
-                    }
-                    if i.key_pressed(egui::Key::PageUp) {
-                        hv.adjust_cur_pos(-(hv.bytes_per_screen() as isize))
-                    }
-                    if i.key_pressed(egui::Key::PageDown) {
-                        hv.adjust_cur_pos(hv.bytes_per_screen() as isize)
-                    }
-                    if i.key_pressed(egui::Key::ArrowLeft) {
-                        hv.adjust_cur_pos(-1)
-                    }
-                    if i.key_pressed(egui::Key::ArrowRight) {
-                        hv.adjust_cur_pos(1)
-                    }
-                    if i.key_pressed(egui::Key::ArrowUp) {
-                        hv.adjust_cur_pos(-(hv.bytes_per_row as isize))
-                    }
-                    if i.key_pressed(egui::Key::ArrowDown) {
-                        hv.adjust_cur_pos(hv.bytes_per_row as isize)
-                    }
-                    if i.key_pressed(egui::Key::Enter) {
-                        hv.adjust_cur_pos(hv.bytes_per_screen() as isize)
-                    }
+        let goto_modal: Modal = Modal::new(ctx, "goto_modal");
 
-                    // Mouse
-                    if i.scroll_delta.y != 0.0 {
-                        let scroll_amt = -(i.scroll_delta.y as isize / 50);
-                        let lines_per_scroll = 1;
-                        hv.adjust_cur_pos(scroll_amt * lines_per_scroll * hv.bytes_per_row as isize)
-                    }
-                });
+        // Standard HexView input
+        if !goto_modal.is_open() {
+            for hv in self.hex_views.iter_mut() {
+                if !hv.pos_locked {
+                    ctx.input(|i| {
+                        // Keys
+                        if i.key_pressed(egui::Key::Home) {
+                            hv.set_cur_pos(0);
+                        }
+                        if i.key_pressed(egui::Key::End)
+                            && hv.file.data.len() >= hv.bytes_per_screen()
+                        {
+                            hv.set_cur_pos(hv.file.data.len() - hv.bytes_per_screen())
+                        }
+                        if i.key_pressed(egui::Key::PageUp) {
+                            hv.adjust_cur_pos(-(hv.bytes_per_screen() as isize))
+                        }
+                        if i.key_pressed(egui::Key::PageDown) {
+                            hv.adjust_cur_pos(hv.bytes_per_screen() as isize)
+                        }
+                        if i.key_pressed(egui::Key::ArrowLeft) {
+                            hv.adjust_cur_pos(-1)
+                        }
+                        if i.key_pressed(egui::Key::ArrowRight) {
+                            hv.adjust_cur_pos(1)
+                        }
+                        if i.key_pressed(egui::Key::ArrowUp) {
+                            hv.adjust_cur_pos(-(hv.bytes_per_row as isize))
+                        }
+                        if i.key_pressed(egui::Key::ArrowDown) {
+                            hv.adjust_cur_pos(hv.bytes_per_row as isize)
+                        }
+                        if i.key_pressed(egui::Key::Enter) {
+                            hv.adjust_cur_pos(hv.bytes_per_screen() as isize)
+                        }
+
+                        // Mouse
+                        if i.scroll_delta.y != 0.0 {
+                            let scroll_amt = -(i.scroll_delta.y as isize / 50);
+                            let lines_per_scroll = 1;
+                            hv.adjust_cur_pos(
+                                scroll_amt * lines_per_scroll * hv.bytes_per_row as isize,
+                            )
+                        }
+                    });
+                }
             }
         }
 
+        // Goto modal
+        goto_modal.show(|ui| {
+            self.show_modal(&goto_modal, ui, ctx);
+        });
+
+        if ctx.input(|i| i.key_pressed(egui::Key::G)) {
+            if goto_modal.is_open() {
+                goto_modal.close();
+            } else {
+                self.goto_modal.value = "0x".to_owned();
+                goto_modal.open();
+            }
+        }
+
+        // Menu bar
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
@@ -171,6 +204,7 @@ impl eframe::App for BdiffApp {
             })
         });
 
+        // Main panel
         egui::CentralPanel::default().show(ctx, |ui| {
             for hv in self.hex_views.iter_mut() {
                 hv.show(ctx, ui, cursor_state);
@@ -182,6 +216,7 @@ impl eframe::App for BdiffApp {
             })
         });
 
+        // Reload changed files
         for hv in self.hex_views.iter_mut() {
             if hv.file.modified.swap(false, Ordering::Relaxed) {
                 let _ = hv.reload_file();
@@ -194,5 +229,43 @@ impl eframe::App for BdiffApp {
                 }
             }
         }
+    }
+}
+
+impl BdiffApp {
+    fn show_modal(&mut self, goto_modal: &Modal, ui: &mut egui::Ui, ctx: &egui::Context) {
+        goto_modal.title(ui, "Go to address");
+        ui.label("Enter a hex address to go to");
+        ui.label(egui::RichText::new(self.goto_modal.status.clone()).color(Color32::RED));
+
+        ui.text_edit_singleline(&mut self.goto_modal.value)
+            .request_focus();
+
+        goto_modal.buttons(ui, |ui| {
+            if ui.button("Go").clicked() || ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                let pos: Option<usize> = parse_int::parse(&self.goto_modal.value).ok();
+
+                match pos {
+                    Some(pos) => {
+                        for hv in self.hex_views.iter_mut() {
+                            hv.set_cur_pos(pos);
+                        }
+                        goto_modal.close();
+                    }
+                    None => {
+                        self.goto_modal.status = "Invalid address".to_owned();
+                        self.goto_modal.value = "0x".to_owned();
+                    }
+                }
+            }
+
+            if goto_modal.button(ui, "Cancel").clicked() {
+                goto_modal.close();
+            };
+
+            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+                goto_modal.close();
+            }
+        });
     }
 }

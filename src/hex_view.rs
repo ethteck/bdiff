@@ -376,8 +376,8 @@ impl HexView {
                     ui.menu_button("...", |ui| {
                         ui.checkbox(&mut self.show_selection_info, "Selection info");
                         ui.checkbox(&mut self.show_cursor_info, "Cursor info");
-                        ui.checkbox(&mut self.sv.show, "String viewer");
                         ui.checkbox(&mut self.dv.show, "Data viewer");
+                        ui.checkbox(&mut self.sv.show, "String viewer");
                         ui.checkbox(&mut self.mt.show, "Map tool");
                     });
 
@@ -392,8 +392,6 @@ impl HexView {
                 |ui: &mut egui::Ui| {
                     ui.vertical(|ui| {
                         self.show_hex_grid(ctx, ui, cursor_state, font_size);
-
-                        self.sv.display(ui, self.id, self.get_selected_bytes());
 
                         if self.show_selection_info {
                             let selection_text = match self.selection.state {
@@ -459,7 +457,7 @@ impl HexView {
 
                     ui.with_layout(egui::Layout::top_down(eframe::emath::Align::Min), |ui| {
                         self.dv.display(ui, self.id, self.get_selected_bytes());
-
+                        self.sv.display(ui, self.id, self.get_selected_bytes());
                         self.mt.display(ui);
                     });
                 },
