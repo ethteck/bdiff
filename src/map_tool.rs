@@ -41,17 +41,7 @@ impl MapTool {
                     |ui| {
                         if ui.button("Open").clicked() {
                             if let Some(path) = rfd::FileDialog::new().pick_file() {
-                                let mf = MapFile::from_path(path.clone());
-
-                                match mf {
-                                    Ok(map_file) => {
-                                        self.map_file = Some(map_file);
-                                    }
-                                    Err(e) => {
-                                        self.map_file = None;
-                                        self.last_status = Some(e);
-                                    }
-                                }
+                                self.load_file(&path);
                             }
                         }
 
@@ -62,5 +52,19 @@ impl MapTool {
                 );
             });
         });
+    }
+
+    pub fn load_file(&mut self, path: &std::path::Path) {
+        let mf = MapFile::from_path(path.to_owned());
+
+        match mf {
+            Ok(map_file) => {
+                self.map_file = Some(map_file);
+            }
+            Err(e) => {
+                self.map_file = None;
+                self.last_status = Some(e);
+            }
+        }
     }
 }

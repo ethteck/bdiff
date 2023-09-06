@@ -1,5 +1,6 @@
 mod app;
 mod bin_file;
+mod config;
 mod data_viewer;
 mod hex_view;
 mod map_file;

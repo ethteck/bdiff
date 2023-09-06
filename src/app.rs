@@ -1,5 +1,6 @@
 use std::{path::PathBuf, sync::atomic::Ordering};
 
+use anyhow::Error;
 use eframe::{
     egui::{self},
     epaint::{Color32, Rounding, Shadow},
@@ -7,7 +8,7 @@ use eframe::{
 
 use egui_modal::Modal;
 
-use crate::{bin_file::BinFile, hex_view::HexView};
+use crate::{bin_file::BinFile, config::load_project_config, hex_view::HexView};
 
 #[derive(Default)]
 struct GotoModal {
@@ -34,18 +35,26 @@ impl BdiffApp {
             ..Default::default()
         };
 
-        for path in paths {
-            ret.open_file(path);
+        if !paths.is_empty() {
+            for path in paths {
+                let _ = ret.open_file(path);
+            }
+        } else {
+            log::info!("Loading project config from file");
+            let _ = load_project_config(&mut ret);
         }
 
         ret
     }
 
-    fn open_file(&mut self, path: PathBuf) {
-        let file = BinFile::from_path(path.clone()).unwrap();
+    pub fn open_file(&mut self, path: PathBuf) -> Result<&mut HexView, Error> {
+        let file = BinFile::from_path(path.clone())?;
 
-        self.hex_views.push(HexView::new(file, self.next_hv_id));
+        let hv = HexView::new(file, self.next_hv_id);
+        self.hex_views.push(hv);
         self.next_hv_id += 1;
+
+        Ok(self.hex_views.last_mut().unwrap())
     }
 }
 
@@ -188,7 +197,7 @@ impl eframe::App for BdiffApp {
                 ui.menu_button("File", |ui| {
                     if ui.button("Open").clicked() {
                         if let Some(path) = rfd::FileDialog::new().pick_file() {
-                            self.open_file(path);
+                            let _ = self.open_file(path);
                         }
                         ui.close_menu();
                     }
@@ -236,10 +245,11 @@ impl BdiffApp {
     fn show_modal(&mut self, goto_modal: &Modal, ui: &mut egui::Ui, ctx: &egui::Context) {
         goto_modal.title(ui, "Go to address");
         ui.label("Enter a hex address to go to");
-        ui.label(egui::RichText::new(self.goto_modal.status.clone()).color(Color32::RED));
 
         ui.text_edit_singleline(&mut self.goto_modal.value)
             .request_focus();
+
+        ui.label(egui::RichText::new(self.goto_modal.status.clone()).color(Color32::RED));
 
         goto_modal.buttons(ui, |ui| {
             if ui.button("Go").clicked() || ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
