@@ -5,8 +5,8 @@ use eframe::{
 };
 
 use crate::{
-    app::CursorState, bin_file::read_file_bytes, data_viewer::DataViewer, map_tool::MapTool,
-    string_viewer::StringViewer,
+    app::CursorState, bin_file::read_file_bytes, data_viewer::DataViewer, diff_state::DiffState,
+    map_tool::MapTool, string_viewer::StringViewer,
 };
 use crate::{bin_file::BinFile, spacer::Spacer};
 
@@ -62,7 +62,6 @@ impl HexViewSelection {
     }
 }
 
-#[derive(Default)]
 pub struct HexView {
     pub id: usize,
     pub file: BinFile,
@@ -78,6 +77,27 @@ pub struct HexView {
     dv: DataViewer,
     pub mt: MapTool,
     pub closed: bool,
+}
+
+impl Default for HexView {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            file: BinFile::default(),
+            num_rows: 0,
+            bytes_per_row: 0,
+            cur_pos: 0,
+            pos_locked: false,
+            selection: HexViewSelection::default(),
+            cursor_pos: None,
+            show_selection_info: true,
+            show_cursor_info: true,
+            sv: StringViewer::default(),
+            dv: DataViewer::default(),
+            mt: MapTool::default(),
+            closed: false,
+        }
+    }
 }
 
 impl HexView {
@@ -141,6 +161,7 @@ impl HexView {
 
     fn show_hex_grid(
         &mut self,
+        diff_state: &DiffState,
         ctx: &egui::Context,
         ui: &mut egui::Ui,
         cursor_state: CursorState,
@@ -222,9 +243,20 @@ impl HexView {
                                     egui::RichText::new(byte_text)
                                         .monospace()
                                         .size(font_size)
-                                        .color(match byte {
-                                            Some(0) => Color32::DARK_GRAY,
-                                            _ => Color32::LIGHT_GRAY,
+                                        .color(if diff_state.enabled {
+                                            if diff_state.is_diff_at(row_current_pos) {
+                                                Color32::RED
+                                            } else {
+                                                match byte {
+                                                    Some(0) => Color32::DARK_GRAY,
+                                                    _ => Color32::LIGHT_GRAY,
+                                                }
+                                            }
+                                        } else {
+                                            match byte {
+                                                Some(0) => Color32::DARK_GRAY,
+                                                _ => Color32::LIGHT_GRAY,
+                                            }
                                         })
                                         .background_color({
                                             if self.selection.contains(row_current_pos) {
@@ -248,7 +280,7 @@ impl HexView {
                                 }
                                 i += 1;
 
-                                if i < self.bytes_per_row - 1 {
+                                if i < self.bytes_per_row {
                                     ui.add(Spacer::default().spacing_x(4.0));
                                 }
                             }
@@ -357,7 +389,13 @@ impl HexView {
         }
     }
 
-    pub fn show(&mut self, ctx: &egui::Context, ui: &mut egui::Ui, cursor_state: CursorState) {
+    pub fn show(
+        &mut self,
+        diff_state: &DiffState,
+        ctx: &egui::Context,
+        ui: &mut egui::Ui,
+        cursor_state: CursorState,
+    ) {
         let font_size = 14.0;
 
         ui.group(|ui| {
@@ -391,7 +429,7 @@ impl HexView {
                 egui::Layout::left_to_right(eframe::emath::Align::Min),
                 |ui: &mut egui::Ui| {
                     ui.vertical(|ui| {
-                        self.show_hex_grid(ctx, ui, cursor_state, font_size);
+                        self.show_hex_grid(diff_state, ctx, ui, cursor_state, font_size);
 
                         if self.show_selection_info {
                             let selection_text = match self.selection.state {

@@ -2,6 +2,7 @@ mod app;
 mod bin_file;
 mod config;
 mod data_viewer;
+mod diff_state;
 mod hex_view;
 mod map_file;
 mod map_tool;

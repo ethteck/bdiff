@@ -1,14 +1,19 @@
-use std::{path::PathBuf, sync::atomic::Ordering};
+use std::{
+    path::{Path, PathBuf},
+    sync::atomic::Ordering,
+};
 
 use anyhow::Error;
 use eframe::{
-    egui::{self},
+    egui::{self, Checkbox},
     epaint::{Color32, Rounding, Shadow},
 };
 
 use egui_modal::Modal;
 
-use crate::{bin_file::BinFile, config::load_project_config, hex_view::HexView};
+use crate::{
+    bin_file::BinFile, config::read_json_config, diff_state::DiffState, hex_view::HexView,
+};
 
 #[derive(Default)]
 struct GotoModal {
@@ -16,11 +21,22 @@ struct GotoModal {
     status: String,
 }
 
-#[derive(Default)]
 pub struct BdiffApp {
     next_hv_id: usize,
     hex_views: Vec<HexView>,
+    diff_state: DiffState,
     goto_modal: GotoModal,
+}
+
+impl Default for BdiffApp {
+    fn default() -> Self {
+        Self {
+            next_hv_id: 0,
+            hex_views: Vec::new(),
+            diff_state: DiffState::default(),
+            goto_modal: GotoModal::default(),
+        }
+    }
 }
 
 impl BdiffApp {
@@ -41,8 +57,22 @@ impl BdiffApp {
             }
         } else {
             log::info!("Loading project config from file");
-            let _ = load_project_config(&mut ret);
+            let config_path = Path::new("bdiff.json");
+
+            if config_path.exists() {
+                let config = read_json_config(config_path).unwrap();
+
+                for file in config.files {
+                    let hv = ret.open_file(file.path).unwrap();
+
+                    if let Some(map) = file.map {
+                        hv.mt.load_file(&map);
+                    }
+                }
+            }
         }
+
+        ret.diff_state.recalculate(&ret.hex_views);
 
         ret
     }
@@ -198,7 +228,9 @@ impl eframe::App for BdiffApp {
                     if ui.button("Open").clicked() {
                         if let Some(path) = rfd::FileDialog::new().pick_file() {
                             let _ = self.open_file(path);
+                            self.diff_state.recalculate(&self.hex_views);
                         }
+
                         ui.close_menu();
                     }
                     if ui.button("Quit").clicked() {
@@ -206,29 +238,39 @@ impl eframe::App for BdiffApp {
                     }
                 });
                 ui.menu_button("Options", |ui| {
-                    if ui.button("Options").clicked() {
-                        ui.close_menu();
+                    let diff_checkbox = Checkbox::new(&mut self.diff_state.enabled, "Display diff");
+
+                    if ui
+                        .add_enabled(self.hex_views.len() >= 2, diff_checkbox)
+                        .clicked()
+                        && self.diff_state.enabled
+                    {
+                        self.diff_state.recalculate(&self.hex_views);
                     }
                 });
             })
         });
 
+        // Reload changed files
+        let mut calc_diff = false;
+
         // Main panel
         egui::CentralPanel::default().show(ctx, |ui| {
             for hv in self.hex_views.iter_mut() {
-                hv.show(ctx, ui, cursor_state);
+                hv.show(&self.diff_state, ctx, ui, cursor_state);
             }
 
             self.hex_views.retain(|hv| {
+                calc_diff = calc_diff || hv.closed;
                 let delete: bool = { hv.closed };
                 !delete
             })
         });
 
-        // Reload changed files
         for hv in self.hex_views.iter_mut() {
             if hv.file.modified.swap(false, Ordering::Relaxed) {
                 let _ = hv.reload_file();
+                calc_diff = true;
             }
 
             if hv.mt.map_file.is_some() {
@@ -237,6 +279,10 @@ impl eframe::App for BdiffApp {
                     let _ = map_file.reload();
                 }
             }
+        }
+
+        if calc_diff {
+            self.diff_state.recalculate(&self.hex_views);
         }
     }
 }
