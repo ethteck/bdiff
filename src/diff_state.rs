@@ -31,6 +31,10 @@ impl DiffState {
     }
 
     pub fn get_next_diff(&self, start: usize) -> Option<usize> {
+        if !self.enabled {
+            return None;
+        }
+
         for (i, diff) in self.diffs.iter().enumerate().skip(start) {
             if *diff {
                 return Some(i);

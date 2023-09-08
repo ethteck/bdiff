@@ -117,12 +117,14 @@ impl HexView {
     }
 
     pub fn set_cur_pos(&mut self, val: usize) {
-        self.cur_pos = val.clamp(0, self.file.data.len() - 0x8);
+        self.cur_pos = val.clamp(0, self.file.data.len() - self.bytes_per_row);
     }
 
     pub fn adjust_cur_pos(&mut self, delta: isize) {
-        self.cur_pos =
-            (self.cur_pos as isize + delta).clamp(0, self.file.data.len() as isize - 0x8) as usize;
+        self.cur_pos = (self.cur_pos as isize + delta).clamp(
+            0,
+            self.file.data.len() as isize - self.bytes_per_row as isize,
+        ) as usize;
     }
 
     pub fn bytes_per_screen(&self) -> usize {

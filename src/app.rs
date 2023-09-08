@@ -191,7 +191,31 @@ impl eframe::App for BdiffApp {
                             hv.adjust_cur_pos(hv.bytes_per_row as isize)
                         }
                         if i.key_pressed(egui::Key::Enter) {
-                            hv.adjust_cur_pos(hv.bytes_per_screen() as isize)
+                            let last_byte = hv.cur_pos + hv.bytes_per_screen() - 1;
+
+                            if self.diff_state.enabled {
+                                if last_byte < hv.file.data.len() {
+                                    match self.diff_state.get_next_diff(last_byte) {
+                                        Some(next_diff) => {
+                                            // Move to the next diff
+                                            let new_pos =
+                                                next_diff - (next_diff % hv.bytes_per_row);
+                                            hv.set_cur_pos(new_pos);
+                                        }
+                                        None => {
+                                            // Move to the end of the file
+                                            if hv.file.data.len() >= hv.bytes_per_screen() {
+                                                hv.set_cur_pos(
+                                                    hv.file.data.len() - hv.bytes_per_screen(),
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Move one screen down
+                                hv.adjust_cur_pos(hv.bytes_per_screen() as isize)
+                            }
                         }
 
                         // Mouse
