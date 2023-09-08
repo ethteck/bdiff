@@ -455,7 +455,7 @@ impl HexView {
                                             length,
                                             entry.symbol_name,
                                             start - entry.symbol_vrom
-                                        )
+                                            )
                                         }
                                         None => {
                                             format!(

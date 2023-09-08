@@ -107,7 +107,12 @@ impl MapFile {
         let entries: Vec<_> = self.data.values(start..end).collect();
 
         match entries.get(0) {
-            Some(entry) => Some(*entry),
+            Some(entry) => {
+                if entry.seg_vrom > start {
+                    return None;
+                }
+                Some(*entry)
+            }
             None => None,
         }
     }
