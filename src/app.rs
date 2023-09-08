@@ -21,22 +21,12 @@ struct GotoModal {
     status: String,
 }
 
+#[derive(Default)]
 pub struct BdiffApp {
     next_hv_id: usize,
     hex_views: Vec<HexView>,
     diff_state: DiffState,
     goto_modal: GotoModal,
-}
-
-impl Default for BdiffApp {
-    fn default() -> Self {
-        Self {
-            next_hv_id: 0,
-            hex_views: Vec::new(),
-            diff_state: DiffState::default(),
-            goto_modal: GotoModal::default(),
-        }
-    }
 }
 
 impl BdiffApp {
