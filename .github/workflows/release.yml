@@ -72,7 +72,8 @@ jobs:
             mv "$i" "../out/$(sed -E "s/([^/]+)\/[^/]+\/release\/($CARGO_BIN_NAME)/\2-\1/" <<< "$i")"
           done
           ls -R ../out
-      - name: Release
-        uses: softprops/action-gh-release@v1
+      - name: Update release
+        uses: johnwbyrd/update-release@v1.0.0
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           files: out/*
