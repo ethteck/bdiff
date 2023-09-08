@@ -395,7 +395,7 @@ checksum = "414dcefbc63d77c526a76b3afcf6fbb9b5e2791c19c3aa2297733208750c6e53"
 
 [[package]]
 name = "bdiff"
-version = "0.1.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "argh",
