@@ -446,23 +446,28 @@ impl HexView {
                                         None => None,
                                     };
 
-                                    match map_entry {
-                                        Some(entry) => {
-                                            format!(
-                                            "Selection: 0x{:X} - 0x{:X} (len 0x{:X}) ({} + 0x{})",
-                                            start,
-                                            end,
-                                            length,
-                                            entry.symbol_name,
-                                            start - entry.symbol_vrom
-                                            )
+                                    let beginning = match length {
+                                        1 => {
+                                            format!("Selection: 0x{:X}", start)
                                         }
-                                        None => {
+                                        _ => {
                                             format!(
                                                 "Selection: 0x{:X} - 0x{:X} (len 0x{:X})",
                                                 start, end, length
                                             )
                                         }
+                                    };
+
+                                    match map_entry {
+                                        Some(entry) => {
+                                            format!(
+                                                "{} ({} + 0x{})",
+                                                beginning,
+                                                entry.symbol_name,
+                                                start - entry.symbol_vrom
+                                            )
+                                        }
+                                        None => beginning,
                                     }
                                 }
                             };

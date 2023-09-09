@@ -22,11 +22,18 @@ struct GotoModal {
 }
 
 #[derive(Default)]
+struct Options {
+    natural_scroll_dir: bool,
+}
+
+#[derive(Default)]
 pub struct BdiffApp {
     next_hv_id: usize,
     hex_views: Vec<HexView>,
     diff_state: DiffState,
     goto_modal: GotoModal,
+    scroll_overflow: f32,
+    options: Options,
 }
 
 impl BdiffApp {
@@ -208,12 +215,33 @@ impl eframe::App for BdiffApp {
                             }
                         }
 
-                        // Mouse
+                        // Scrolling
                         if i.scroll_delta.y != 0.0 {
-                            let scroll_amt = -(i.scroll_delta.y as isize / 50);
                             let lines_per_scroll = 1;
+                            let scroll_threshold = 50; // One tick of the scroll wheel for me
+                            let scroll_dir_modifier = match self.options.natural_scroll_dir {
+                                false => -1,
+                                true => 1,
+                            };
+                            let scroll_amt: isize;
+
+                            if i.scroll_delta.y.abs() >= scroll_threshold as f32 {
+                                // Scroll wheels / very fast scrolling
+                                scroll_amt = i.scroll_delta.y as isize / scroll_threshold;
+                                self.scroll_overflow = 0.0;
+                            } else {
+                                // Trackpads - Accumulate scroll amount until it reaches the threshold
+                                self.scroll_overflow += i.scroll_delta.y;
+                                scroll_amt = self.scroll_overflow as isize / scroll_threshold;
+                                if scroll_amt != 0 {
+                                    self.scroll_overflow -= (scroll_amt * scroll_threshold) as f32;
+                                }
+                            }
                             hv.adjust_cur_pos(
-                                scroll_amt * lines_per_scroll * hv.bytes_per_row as isize,
+                                scroll_dir_modifier
+                                    * scroll_amt
+                                    * lines_per_scroll
+                                    * hv.bytes_per_row as isize,
                             )
                         }
                     });
@@ -260,6 +288,18 @@ impl eframe::App for BdiffApp {
                         && self.diff_state.enabled
                     {
                         self.diff_state.recalculate(&self.hex_views);
+                    }
+
+                    ui.checkbox(
+                        &mut self.options.natural_scroll_dir,
+                        "\"Natural\" scroll direction",
+                    );
+                });
+                ui.menu_button("Action", |ui| {
+                    if ui.button("Go to address (G)").clicked() {
+                        self.goto_modal.value = "0x".to_owned();
+                        goto_modal.open();
+                        ui.close_menu();
                     }
                 });
             })

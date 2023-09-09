@@ -108,7 +108,7 @@ impl MapFile {
 
         match entries.get(0) {
             Some(entry) => {
-                if entry.seg_vrom > start {
+                if entry.symbol_vrom > start {
                     return None;
                 }
                 Some(*entry)
