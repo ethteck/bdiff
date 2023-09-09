@@ -12,7 +12,10 @@ use eframe::{
 use egui_modal::Modal;
 
 use crate::{
-    bin_file::BinFile, config::read_json_config, diff_state::DiffState, hex_view::HexView,
+    bin_file::BinFile,
+    config::read_json_config,
+    diff_state::DiffState,
+    hex_view::{HexView, HexViewSelection, HexViewSelectionState},
 };
 
 #[derive(Default)]
@@ -21,9 +24,16 @@ struct GotoModal {
     status: String,
 }
 
-#[derive(Default)]
 struct Options {
-    natural_scroll_dir: bool,
+    mirror_selection: bool,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            mirror_selection: true,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -34,6 +44,8 @@ pub struct BdiffApp {
     goto_modal: GotoModal,
     scroll_overflow: f32,
     options: Options,
+    last_selection: HexViewSelection,
+    selecting_hv: Option<usize>,
 }
 
 impl BdiffApp {
@@ -219,10 +231,6 @@ impl eframe::App for BdiffApp {
                         if i.scroll_delta.y != 0.0 {
                             let lines_per_scroll = 1;
                             let scroll_threshold = 50; // One tick of the scroll wheel for me
-                            let scroll_dir_modifier = match self.options.natural_scroll_dir {
-                                false => -1,
-                                true => 1,
-                            };
                             let scroll_amt: isize;
 
                             if i.scroll_delta.y.abs() >= scroll_threshold as f32 {
@@ -238,10 +246,7 @@ impl eframe::App for BdiffApp {
                                 }
                             }
                             hv.adjust_cur_pos(
-                                scroll_dir_modifier
-                                    * scroll_amt
-                                    * lines_per_scroll
-                                    * hv.bytes_per_row as isize,
+                                -scroll_amt * lines_per_scroll * hv.bytes_per_row as isize,
                             )
                         }
                     });
@@ -291,8 +296,8 @@ impl eframe::App for BdiffApp {
                     }
 
                     ui.checkbox(
-                        &mut self.options.natural_scroll_dir,
-                        "\"Natural\" scroll direction",
+                        &mut self.options.mirror_selection,
+                        "Mirror selection across files",
                     );
                 });
                 ui.menu_button("Action", |ui| {
@@ -311,7 +316,41 @@ impl eframe::App for BdiffApp {
         // Main panel
         egui::CentralPanel::default().show(ctx, |ui| {
             for hv in self.hex_views.iter_mut() {
-                hv.show(&self.diff_state, ctx, ui, cursor_state);
+                let cur_sel = hv.selection.clone();
+                let can_selection_change = match self.selecting_hv {
+                    Some(id) => id == hv.id,
+                    None => true,
+                };
+                hv.show(
+                    &self.diff_state,
+                    ctx,
+                    ui,
+                    cursor_state,
+                    can_selection_change,
+                );
+                if hv.selection != cur_sel {
+                    match hv.selection.state {
+                        HexViewSelectionState::Selecting => {
+                            self.selecting_hv = Some(hv.id);
+                        }
+                        _ => {
+                            self.selecting_hv = None;
+                        }
+                    }
+                    self.last_selection = hv.selection.clone();
+                }
+            }
+
+            if self.options.mirror_selection {
+                for hv in self.hex_views.iter_mut() {
+                    if hv.selection != self.last_selection {
+                        hv.selection = self.last_selection.clone();
+                    }
+                }
+            }
+
+            if cursor_state == CursorState::Released {
+                self.selecting_hv = None;
             }
 
             self.hex_views.retain(|hv| {
@@ -370,6 +409,7 @@ impl BdiffApp {
             }
 
             if goto_modal.button(ui, "Cancel").clicked() {
+                self.goto_modal.status = "".to_owned();
                 goto_modal.close();
             };
 

@@ -10,19 +10,19 @@ use crate::{
 };
 use crate::{bin_file::BinFile, spacer::Spacer};
 
-#[derive(Default, Debug, PartialEq)]
-enum HexViewSelectionState {
+#[derive(Clone, Default, Debug, PartialEq)]
+pub enum HexViewSelectionState {
     #[default]
     None,
     Selecting,
     Selected,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct HexViewSelection {
     first: usize,
     second: usize,
-    state: HexViewSelectionState,
+    pub state: HexViewSelectionState,
 }
 
 impl HexViewSelection {
@@ -167,6 +167,7 @@ impl HexView {
         ctx: &egui::Context,
         ui: &mut egui::Ui,
         cursor_state: CursorState,
+        can_selection_change: bool,
         font_size: f32,
     ) {
         let grid_rect = ui
@@ -273,12 +274,17 @@ impl HexView {
                                 let res = ui.add(hex_label);
 
                                 if byte.is_some() {
-                                    self.handle_interactivity(
-                                        res,
-                                        cursor_state,
-                                        row_current_pos,
-                                        ctx,
-                                    );
+                                    if res.hovered() {
+                                        self.cursor_pos = Some(row_current_pos);
+                                    }
+                                    if can_selection_change {
+                                        self.handle_selection(
+                                            res,
+                                            cursor_state,
+                                            row_current_pos,
+                                            ctx,
+                                        );
+                                    }
                                 }
                                 i += 1;
 
@@ -327,12 +333,17 @@ impl HexView {
                                 ui.add(Spacer::default().spacing_x(1.0));
 
                                 if byte.is_some() {
-                                    self.handle_interactivity(
-                                        res,
-                                        cursor_state,
-                                        row_current_pos,
-                                        ctx,
-                                    );
+                                    if res.hovered() {
+                                        self.cursor_pos = Some(row_current_pos);
+                                    }
+                                    if can_selection_change {
+                                        self.handle_selection(
+                                            res,
+                                            cursor_state,
+                                            row_current_pos,
+                                            ctx,
+                                        );
+                                    }
                                 }
                                 i += 1;
                             }
@@ -353,7 +364,7 @@ impl HexView {
         }
     }
 
-    fn handle_interactivity(
+    fn handle_selection(
         &mut self,
         res: egui::Response,
         cursor_state: CursorState,
@@ -397,6 +408,7 @@ impl HexView {
         ctx: &egui::Context,
         ui: &mut egui::Ui,
         cursor_state: CursorState,
+        can_selection_change: bool,
     ) {
         let font_size = 14.0;
 
@@ -431,7 +443,14 @@ impl HexView {
                 egui::Layout::left_to_right(eframe::emath::Align::Min),
                 |ui: &mut egui::Ui| {
                     ui.vertical(|ui| {
-                        self.show_hex_grid(diff_state, ctx, ui, cursor_state, font_size);
+                        self.show_hex_grid(
+                            diff_state,
+                            ctx,
+                            ui,
+                            cursor_state,
+                            can_selection_change,
+                            font_size,
+                        );
 
                         if self.show_selection_info {
                             let selection_text = match self.selection.state {
