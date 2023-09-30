@@ -43,7 +43,7 @@ pub struct BdiffApp {
     goto_modal: GotoModal,
     scroll_overflow: f32,
     options: Options,
-    last_selection: HexViewSelection,
+    global_selection: HexViewSelection, // the selection that all hex views will mirror
     selecting_hv: Option<usize>,
 }
 
@@ -199,7 +199,7 @@ impl eframe::App for BdiffApp {
                             hv.adjust_cur_pos(hv.bytes_per_row as isize)
                         }
                         if i.key_pressed(egui::Key::Enter) {
-                            let last_byte = hv.cur_pos + hv.bytes_per_screen() - 1;
+                            let last_byte = hv.cur_pos + hv.bytes_per_screen();
 
                             if self.diff_state.enabled {
                                 if last_byte < hv.file.data.len() {
@@ -336,14 +336,14 @@ impl eframe::App for BdiffApp {
                             self.selecting_hv = None;
                         }
                     }
-                    self.last_selection = hv.selection.clone();
+                    self.global_selection = hv.selection.clone();
                 }
             }
 
             if self.options.mirror_selection {
                 for hv in self.hex_views.iter_mut() {
-                    if hv.selection != self.last_selection {
-                        hv.selection = self.last_selection.clone();
+                    if hv.selection != self.global_selection {
+                        hv.selection = self.global_selection.clone();
                     }
                 }
             }
@@ -359,6 +359,7 @@ impl eframe::App for BdiffApp {
             })
         });
 
+        // File reloading
         for hv in self.hex_views.iter_mut() {
             if hv.file.modified.swap(false, Ordering::Relaxed) {
                 let _ = hv.reload_file();
