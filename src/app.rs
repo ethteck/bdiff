@@ -6,9 +6,8 @@ use std::{
 use anyhow::Error;
 use eframe::{
     egui::{self, Checkbox},
-    epaint::{Color32, Rounding, Shadow},
+    epaint::{Rounding, Shadow},
 };
-
 use egui_modal::Modal;
 
 use crate::{
@@ -388,7 +387,7 @@ impl BdiffApp {
         ui.text_edit_singleline(&mut self.goto_modal.value)
             .request_focus();
 
-        ui.label(egui::RichText::new(self.goto_modal.status.clone()).color(Color32::RED));
+        ui.label(egui::RichText::new(self.goto_modal.status.clone()).color(egui::Color32::RED));
 
         goto_modal.buttons(ui, |ui| {
             if ui.button("Go").clicked() || ctx.input(|i| i.key_pressed(egui::Key::Enter)) {

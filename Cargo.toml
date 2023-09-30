@@ -16,14 +16,15 @@ build = "build.rs"
 anyhow = "1.0.75"
 argh = "0.1.12"
 dtoa = "1.0.9"
-eframe = { version = "0.22.0", features = ["persistence"] }
-egui-modal = "0.2.4"
+eframe = { version = "0.23.0", features = ["persistence"] }
+egui-modal = "0.2.5"
+egui_dock = "0.8.0"
 encoding_rs = "0.8.33"
 iset = "0.2.2"
 log = "0.4.20"
 notify = "6.1.1"
 parse_int = "0.6.0"
-rfd = "0.11.4"
+rfd = "0.12.0"
 serde = "1.0"
 serde_json = "1.0"
 
@@ -32,4 +33,4 @@ winres = "0.1.12"
 
 [build-dependencies]
 anyhow = "1.0.75"
-vergen = { version = "8.2.4", features = ["build", "cargo", "git", "gitcl"] }
+vergen = { version = "8.2.5", features = ["build", "cargo", "git", "gitcl"] }
