@@ -26,11 +26,11 @@ pub struct HexViewSelection {
 }
 
 impl HexViewSelection {
-    fn start(&self) -> usize {
+    pub fn start(&self) -> usize {
         self.first.min(self.second)
     }
 
-    fn end(&self) -> usize {
+    pub fn end(&self) -> usize {
         self.second.max(self.first)
     }
 
@@ -59,6 +59,11 @@ impl HexViewSelection {
         self.first = 0;
         self.second = 0;
         self.state = HexViewSelectionState::None;
+    }
+
+    pub fn adjust_cur_pos(&mut self, delta: isize) {
+        self.first = (self.first as isize + delta).max(0) as usize;
+        self.second = (self.second as isize + delta).max(0) as usize;
     }
 }
 

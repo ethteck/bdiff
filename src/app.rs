@@ -94,83 +94,44 @@ impl BdiffApp {
 
         Ok(self.hex_views.last_mut().unwrap())
     }
-}
 
-fn setup_custom_fonts(ctx: &egui::Context) {
-    // Start with the default fonts (we will be adding to them rather than replacing them).
-    let mut fonts = egui::FontDefinitions::default();
+    fn get_hex_view_by_id(&mut self, id: usize) -> Option<&mut HexView> {
+        self.hex_views.iter_mut().find(|hv| hv.id == id)
+    }
 
-    let monospace_key = "jetbrains-mono";
-    let string_key = "noto-sans-jp";
+    fn handle_hex_view_input(&mut self, ctx: &egui::Context) {
+        if ctx.input(|i| i.modifiers.shift) {
+            if let Some(hv) = self.selecting_hv {
+                if let Some(hv) = self.get_hex_view_by_id(hv) {
+                    // Move selection
+                    let mut changed = false;
+                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) && hv.selection.start() > 0 && hv.selection.end() > 0 {
+                        hv.selection.adjust_cur_pos(-1);
+                        changed = true;
+                    }
+                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) && hv.selection.start() < hv.file.data.len() && hv.selection.end() < hv.file.data.len() {
+                        hv.selection.adjust_cur_pos(1);
+                        changed = true;
+                    }
+                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) && hv.selection.start() > hv.bytes_per_row && hv.selection.end() > hv.bytes_per_row {
+                        hv.selection.adjust_cur_pos(-(hv.bytes_per_row as isize));
+                        changed = true;
+                    }
+                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) && hv.selection.start() < hv.file.data.len() - hv.bytes_per_row && hv.selection.end() < hv.file.data.len() - hv.bytes_per_row {
+                        hv.selection.adjust_cur_pos(hv.bytes_per_row as isize);
+                        changed = true;
+                    }
 
-    fonts.font_data.insert(
-        monospace_key.to_owned(),
-        egui::FontData::from_static(include_bytes!(
-            "../assets/fonts/jetbrains/JetBrainsMonoNL-Regular.ttf"
-        )),
-    );
-
-    fonts.font_data.insert(
-        string_key.to_owned(),
-        egui::FontData::from_static(include_bytes!(
-            "../assets/fonts/noto/NotoSansJP-Regular.ttf"
-        )),
-    );
-
-    // Put custom fonts first (highest priority):
-    fonts
-        .families
-        .entry(egui::FontFamily::Monospace)
-        .or_default()
-        .insert(0, monospace_key.to_owned());
-
-    fonts
-        .families
-        .entry(egui::FontFamily::Proportional)
-        .or_default()
-        .insert(0, string_key.to_owned());
-
-    // Tell egui to use these fonts:
-    ctx.set_fonts(fonts);
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum CursorState {
-    Hovering,
-    Pressed,
-    StillDown,
-    Released,
-}
-
-impl eframe::App for BdiffApp {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
-        let mut style: egui::Style = (*ctx.style()).clone();
-        style.visuals.popup_shadow = Shadow {
-            extrusion: 0.0,
-            color: egui::Color32::TRANSPARENT,
-        };
-        style.visuals.menu_rounding = Rounding::default();
-        ctx.set_style(style);
-
-        let cursor_state: CursorState = ctx.input(|i| {
-            if i.pointer.primary_pressed() {
-                CursorState::Pressed
-            } else if i.pointer.primary_down() {
-                CursorState::StillDown
-            } else if i.pointer.primary_released() {
-                CursorState::Released
-            } else {
-                CursorState::Hovering
+                    if changed {
+                        self.global_selection = hv.selection.clone();
+                    }
+                }
             }
-        });
-
-        let goto_modal: Modal = Modal::new(ctx, "goto_modal");
-
-        // Standard HexView input
-        if !goto_modal.is_open() {
+        } else {
+            // Move view
             for hv in self.hex_views.iter_mut() {
                 if !hv.pos_locked {
-                    ctx.input(|i| {
+                    ctx.input(|i| { // don't do this - it locks the context
                         // Keys
                         if i.key_pressed(egui::Key::Home) {
                             hv.set_cur_pos(0);
@@ -251,6 +212,83 @@ impl eframe::App for BdiffApp {
                     });
                 }
             }
+        }
+    }
+}
+
+fn setup_custom_fonts(ctx: &egui::Context) {
+    // Start with the default fonts (we will be adding to them rather than replacing them).
+    let mut fonts = egui::FontDefinitions::default();
+
+    let monospace_key = "jetbrains-mono";
+    let string_key = "noto-sans-jp";
+
+    fonts.font_data.insert(
+        monospace_key.to_owned(),
+        egui::FontData::from_static(include_bytes!(
+            "../assets/fonts/jetbrains/JetBrainsMonoNL-Regular.ttf"
+        )),
+    );
+
+    fonts.font_data.insert(
+        string_key.to_owned(),
+        egui::FontData::from_static(include_bytes!(
+            "../assets/fonts/noto/NotoSansJP-Regular.ttf"
+        )),
+    );
+
+    // Put custom fonts first (highest priority):
+    fonts
+        .families
+        .entry(egui::FontFamily::Monospace)
+        .or_default()
+        .insert(0, monospace_key.to_owned());
+
+    fonts
+        .families
+        .entry(egui::FontFamily::Proportional)
+        .or_default()
+        .insert(0, string_key.to_owned());
+
+    // Tell egui to use these fonts:
+    ctx.set_fonts(fonts);
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CursorState {
+    Hovering,
+    Pressed,
+    StillDown,
+    Released,
+}
+
+impl eframe::App for BdiffApp {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        let mut style: egui::Style = (*ctx.style()).clone();
+        style.visuals.popup_shadow = Shadow {
+            extrusion: 0.0,
+            color: egui::Color32::TRANSPARENT,
+        };
+        style.visuals.menu_rounding = Rounding::default();
+        ctx.set_style(style);
+
+        let cursor_state: CursorState = ctx.input(|i| {
+            if i.pointer.primary_pressed() {
+                CursorState::Pressed
+            } else if i.pointer.primary_down() {
+                CursorState::StillDown
+            } else if i.pointer.primary_released() {
+                CursorState::Released
+            } else {
+                CursorState::Hovering
+            }
+        });
+
+        let goto_modal: Modal = Modal::new(ctx, "goto_modal");
+
+        // Standard HexView input
+        if !goto_modal.is_open() {
+            self.handle_hex_view_input(ctx);
         }
 
         // Goto modal
