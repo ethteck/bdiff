@@ -45,11 +45,12 @@ pub struct BdiffApp {
     options: Options,
     global_selection: HexViewSelection, // the selection that all hex views will mirror
     selecting_hv: Option<usize>,
+    last_selected_hv: Option<usize>,
 }
 
 impl BdiffApp {
     pub fn new(cc: &eframe::CreationContext<'_>, paths: Vec<PathBuf>) -> Self {
-        setup_custom_fonts(&cc.egui_ctx);
+        set_up_custom_fonts(&cc.egui_ctx);
 
         let hex_views = Vec::new();
 
@@ -101,23 +102,35 @@ impl BdiffApp {
 
     fn handle_hex_view_input(&mut self, ctx: &egui::Context) {
         if ctx.input(|i| i.modifiers.shift) {
-            if let Some(hv) = self.selecting_hv {
+            // Move selection
+            if let Some(hv) = self.last_selected_hv {
                 if let Some(hv) = self.get_hex_view_by_id(hv) {
-                    // Move selection
                     let mut changed = false;
-                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) && hv.selection.start() > 0 && hv.selection.end() > 0 {
+                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft))
+                        && hv.selection.start() > 0
+                        && hv.selection.end() > 0
+                    {
                         hv.selection.adjust_cur_pos(-1);
                         changed = true;
                     }
-                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) && hv.selection.start() < hv.file.data.len() && hv.selection.end() < hv.file.data.len() {
+                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight))
+                        && hv.selection.start() < hv.file.data.len() - 1
+                        && hv.selection.end() < hv.file.data.len() - 1
+                    {
                         hv.selection.adjust_cur_pos(1);
                         changed = true;
                     }
-                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) && hv.selection.start() > hv.bytes_per_row && hv.selection.end() > hv.bytes_per_row {
+                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp))
+                        && hv.selection.start() >= hv.bytes_per_row
+                        && hv.selection.end() >= hv.bytes_per_row
+                    {
                         hv.selection.adjust_cur_pos(-(hv.bytes_per_row as isize));
                         changed = true;
                     }
-                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) && hv.selection.start() < hv.file.data.len() - hv.bytes_per_row && hv.selection.end() < hv.file.data.len() - hv.bytes_per_row {
+                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown))
+                        && hv.selection.start() < hv.file.data.len() - hv.bytes_per_row
+                        && hv.selection.end() < hv.file.data.len() - hv.bytes_per_row
+                    {
                         hv.selection.adjust_cur_pos(hv.bytes_per_row as isize);
                         changed = true;
                     }
@@ -131,92 +144,91 @@ impl BdiffApp {
             // Move view
             for hv in self.hex_views.iter_mut() {
                 if !hv.pos_locked {
-                    ctx.input(|i| { // don't do this - it locks the context
-                        // Keys
-                        if i.key_pressed(egui::Key::Home) {
-                            hv.set_cur_pos(0);
-                        }
-                        if i.key_pressed(egui::Key::End)
-                            && hv.file.data.len() >= hv.bytes_per_screen()
-                        {
-                            hv.set_cur_pos(hv.file.data.len() - hv.bytes_per_screen())
-                        }
-                        if i.key_pressed(egui::Key::PageUp) {
-                            hv.adjust_cur_pos(-(hv.bytes_per_screen() as isize))
-                        }
-                        if i.key_pressed(egui::Key::PageDown) {
-                            hv.adjust_cur_pos(hv.bytes_per_screen() as isize)
-                        }
-                        if i.key_pressed(egui::Key::ArrowLeft) {
-                            hv.adjust_cur_pos(-1)
-                        }
-                        if i.key_pressed(egui::Key::ArrowRight) {
-                            hv.adjust_cur_pos(1)
-                        }
-                        if i.key_pressed(egui::Key::ArrowUp) {
-                            hv.adjust_cur_pos(-(hv.bytes_per_row as isize))
-                        }
-                        if i.key_pressed(egui::Key::ArrowDown) {
-                            hv.adjust_cur_pos(hv.bytes_per_row as isize)
-                        }
-                        if i.key_pressed(egui::Key::Enter) {
-                            let last_byte = hv.cur_pos + hv.bytes_per_screen();
+                    // Keys
+                    if ctx.input(|i| i.key_pressed(egui::Key::Home)) {
+                        hv.set_cur_pos(0);
+                    }
+                    if ctx.input(|i| i.key_pressed(egui::Key::End))
+                        && hv.file.data.len() >= hv.bytes_per_screen()
+                    {
+                        hv.set_cur_pos(hv.file.data.len() - hv.bytes_per_screen())
+                    }
+                    if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
+                        hv.adjust_cur_pos(-(hv.bytes_per_screen() as isize))
+                    }
+                    if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
+                        hv.adjust_cur_pos(hv.bytes_per_screen() as isize)
+                    }
+                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
+                        hv.adjust_cur_pos(-1)
+                    }
+                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
+                        hv.adjust_cur_pos(1)
+                    }
+                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+                        hv.adjust_cur_pos(-(hv.bytes_per_row as isize))
+                    }
+                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+                        hv.adjust_cur_pos(hv.bytes_per_row as isize)
+                    }
+                    if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        let last_byte = hv.cur_pos + hv.bytes_per_screen();
 
-                            if self.diff_state.enabled {
-                                if last_byte < hv.file.data.len() {
-                                    match self.diff_state.get_next_diff(last_byte) {
-                                        Some(next_diff) => {
-                                            // Move to the next diff
-                                            let new_pos =
-                                                next_diff - (next_diff % hv.bytes_per_row);
-                                            hv.set_cur_pos(new_pos);
-                                        }
-                                        None => {
-                                            // Move to the end of the file
-                                            if hv.file.data.len() >= hv.bytes_per_screen() {
-                                                hv.set_cur_pos(
-                                                    hv.file.data.len() - hv.bytes_per_screen(),
-                                                );
-                                            }
+                        if self.diff_state.enabled {
+                            if last_byte < hv.file.data.len() {
+                                match self.diff_state.get_next_diff(last_byte) {
+                                    Some(next_diff) => {
+                                        // Move to the next diff
+                                        let new_pos = next_diff - (next_diff % hv.bytes_per_row);
+                                        hv.set_cur_pos(new_pos);
+                                    }
+                                    None => {
+                                        // Move to the end of the file
+                                        if hv.file.data.len() >= hv.bytes_per_screen() {
+                                            hv.set_cur_pos(
+                                                hv.file.data.len() - hv.bytes_per_screen(),
+                                            );
                                         }
                                     }
                                 }
-                            } else {
-                                // Move one screen down
-                                hv.adjust_cur_pos(hv.bytes_per_screen() as isize)
+                            }
+                        } else {
+                            // Move one screen down
+                            hv.adjust_cur_pos(hv.bytes_per_screen() as isize)
+                        }
+                    }
+
+                    let scroll_y = ctx.input(|i| i.scroll_delta.y);
+
+                    // Scrolling
+                    if scroll_y != 0.0 {
+                        let lines_per_scroll = 1;
+                        let scroll_threshold = 50; // One tick of the scroll wheel for me
+                        let scroll_amt: isize;
+
+                        if scroll_y.abs() >= scroll_threshold as f32 {
+                            // Scroll wheels / very fast scrolling
+                            scroll_amt = scroll_y as isize / scroll_threshold;
+                            self.scroll_overflow = 0.0;
+                        } else {
+                            // Trackpads - Accumulate scroll amount until it reaches the threshold
+                            self.scroll_overflow += scroll_y;
+                            scroll_amt = self.scroll_overflow as isize / scroll_threshold;
+                            if scroll_amt != 0 {
+                                self.scroll_overflow -= (scroll_amt * scroll_threshold) as f32;
                             }
                         }
-
-                        // Scrolling
-                        if i.scroll_delta.y != 0.0 {
-                            let lines_per_scroll = 1;
-                            let scroll_threshold = 50; // One tick of the scroll wheel for me
-                            let scroll_amt: isize;
-
-                            if i.scroll_delta.y.abs() >= scroll_threshold as f32 {
-                                // Scroll wheels / very fast scrolling
-                                scroll_amt = i.scroll_delta.y as isize / scroll_threshold;
-                                self.scroll_overflow = 0.0;
-                            } else {
-                                // Trackpads - Accumulate scroll amount until it reaches the threshold
-                                self.scroll_overflow += i.scroll_delta.y;
-                                scroll_amt = self.scroll_overflow as isize / scroll_threshold;
-                                if scroll_amt != 0 {
-                                    self.scroll_overflow -= (scroll_amt * scroll_threshold) as f32;
-                                }
-                            }
-                            hv.adjust_cur_pos(
-                                -scroll_amt * lines_per_scroll * hv.bytes_per_row as isize,
-                            )
-                        }
-                    });
+                        hv.adjust_cur_pos(
+                            -scroll_amt * lines_per_scroll * hv.bytes_per_row as isize,
+                        )
+                    }
                 }
             }
         }
     }
 }
 
-fn setup_custom_fonts(ctx: &egui::Context) {
+fn set_up_custom_fonts(ctx: &egui::Context) {
     // Start with the default fonts (we will be adding to them rather than replacing them).
     let mut fonts = egui::FontDefinitions::default();
 
@@ -369,6 +381,7 @@ impl eframe::App for BdiffApp {
                     match hv.selection.state {
                         HexViewSelectionState::Selecting => {
                             self.selecting_hv = Some(hv.id);
+                            self.last_selected_hv = Some(hv.id);
                         }
                         _ => {
                             self.selecting_hv = None;
