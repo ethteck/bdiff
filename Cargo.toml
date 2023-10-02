@@ -18,7 +18,6 @@ argh = "0.1.12"
 dtoa = "1.0.9"
 eframe = { version = "0.23.0", features = ["persistence"] }
 egui-modal = "0.2.5"
-egui_dock = "0.8.0"
 encoding_rs = "0.8.33"
 iset = "0.2.2"
 log = "0.4.20"

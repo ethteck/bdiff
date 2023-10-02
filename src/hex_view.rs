@@ -1,6 +1,6 @@
 use anyhow::Error;
 use eframe::{
-    egui::{self, Sense, Separator},
+    egui::{self, Id, Sense, Separator},
     epaint::Color32,
 };
 
@@ -9,6 +9,12 @@ use crate::{
     map_tool::MapTool, string_viewer::StringViewer,
 };
 use crate::{bin_file::BinFile, spacer::Spacer};
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct HexViewSelectionRange {
+    pub first: usize,
+    pub second: usize,
+}
 
 #[derive(Clone, Default, Debug, PartialEq)]
 pub enum HexViewSelectionState {
@@ -20,18 +26,17 @@ pub enum HexViewSelectionState {
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HexViewSelection {
-    first: usize,
-    second: usize,
+    pub range: HexViewSelectionRange,
     pub state: HexViewSelectionState,
 }
 
 impl HexViewSelection {
     pub fn start(&self) -> usize {
-        self.first.min(self.second)
+        self.range.first.min(self.range.second)
     }
 
     pub fn end(&self) -> usize {
-        self.second.max(self.first)
+        self.range.second.max(self.range.first)
     }
 
     fn contains(&self, grid_pos: usize) -> bool {
@@ -41,29 +46,29 @@ impl HexViewSelection {
     }
 
     pub fn begin(&mut self, grid_pos: usize) {
-        self.first = grid_pos;
-        self.second = grid_pos;
+        self.range.first = grid_pos;
+        self.range.second = grid_pos;
         self.state = HexViewSelectionState::Selecting;
     }
 
     pub fn update(&mut self, grid_pos: usize) {
-        self.second = grid_pos;
+        self.range.second = grid_pos;
     }
 
     pub fn finalize(&mut self, grid_pos: usize) {
-        self.second = grid_pos;
+        self.range.second = grid_pos;
         self.state = HexViewSelectionState::Selected;
     }
 
     pub fn clear(&mut self) {
-        self.first = 0;
-        self.second = 0;
+        self.range.first = 0;
+        self.range.second = 0;
         self.state = HexViewSelectionState::None;
     }
 
     pub fn adjust_cur_pos(&mut self, delta: isize) {
-        self.first = (self.first as isize + delta).max(0) as usize;
-        self.second = (self.second as isize + delta).max(0) as usize;
+        self.range.first = (self.range.first as isize + delta).max(0) as usize;
+        self.range.second = (self.range.second as isize + delta).max(0) as usize;
     }
 }
 
@@ -155,13 +160,13 @@ impl HexView {
     pub fn reload_file(&mut self) -> Result<(), Error> {
         self.file.data = read_file_bytes(self.file.path.clone())?;
 
-        if self.selection.first >= self.file.data.len()
-            && self.selection.second >= self.file.data.len()
+        if self.selection.range.first >= self.file.data.len()
+            && self.selection.range.second >= self.file.data.len()
         {
             self.selection.clear();
         } else {
-            self.selection.first = self.selection.first.min(self.file.data.len() - 1);
-            self.selection.second = self.selection.second.min(self.file.data.len() - 1);
+            self.selection.range.first = self.selection.range.first.min(self.file.data.len() - 1);
+            self.selection.range.second = self.selection.range.second.min(self.file.data.len() - 1);
         }
         Ok(())
     }
@@ -411,13 +416,19 @@ impl HexView {
         &mut self,
         diff_state: &DiffState,
         ctx: &egui::Context,
-        ui: &mut egui::Ui,
         cursor_state: CursorState,
         can_selection_change: bool,
     ) {
         let font_size = 14.0;
 
-        ui.group(|ui| {
+        egui::Window::new(format!(
+            "{}",
+            self.file.path.file_name().unwrap().to_str().unwrap()
+        ))
+        .id(Id::new(format!("hex_view_window_{}", self.id)))
+        .title_bar(false)
+        .resizable(false)
+        .show(ctx, |ui| {
             let file_name = self.file.path.as_path().to_str().unwrap();
 
             ui.with_layout(

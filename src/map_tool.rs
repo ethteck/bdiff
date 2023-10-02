@@ -39,13 +39,19 @@ impl MapTool {
                 ui.with_layout(
                     egui::Layout::left_to_right(eframe::emath::Align::Min),
                     |ui| {
-                        if ui.button("Open").clicked() {
+                        if ui
+                            .button(match self.map_file {
+                                Some(_) => "Load new",
+                                None => "Load",
+                            })
+                            .clicked()
+                        {
                             if let Some(path) = rfd::FileDialog::new().pick_file() {
                                 self.load_file(&path);
                             }
                         }
 
-                        if self.map_file.is_some() && ui.button("Close").clicked() {
+                        if self.map_file.is_some() && ui.button("Unload").clicked() {
                             self.map_file = None;
                         }
                     },

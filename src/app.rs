@@ -363,20 +363,15 @@ impl eframe::App for BdiffApp {
         let mut calc_diff = false;
 
         // Main panel
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ctx, |_ui| {
+            // TODO unused CentralPanel
             for hv in self.hex_views.iter_mut() {
                 let cur_sel = hv.selection.clone();
                 let can_selection_change = match self.selecting_hv {
                     Some(id) => id == hv.id,
                     None => true,
                 };
-                hv.show(
-                    &self.diff_state,
-                    ctx,
-                    ui,
-                    cursor_state,
-                    can_selection_change,
-                );
+                hv.show(&self.diff_state, ctx, cursor_state, can_selection_change);
                 if hv.selection != cur_sel {
                     match hv.selection.state {
                         HexViewSelectionState::Selecting => {
@@ -389,6 +384,19 @@ impl eframe::App for BdiffApp {
                     }
                     self.global_selection = hv.selection.clone();
                 }
+
+                if cursor_state == CursorState::Released {
+                    // If we released the mouse button somewhere else, end the selection
+                    // The state wouldn't be Selecting if we had captured the release event inside the hv
+                    if hv.selection.state == HexViewSelectionState::Selecting {
+                        hv.selection.state = HexViewSelectionState::Selected;
+                    }
+                }
+            }
+
+            if cursor_state == CursorState::Released {
+                self.selecting_hv = None;
+                self.global_selection.state = HexViewSelectionState::Selected;
             }
 
             if self.options.mirror_selection {
@@ -399,10 +407,7 @@ impl eframe::App for BdiffApp {
                 }
             }
 
-            if cursor_state == CursorState::Released {
-                self.selecting_hv = None;
-            }
-
+            // Delete any closed hex views
             self.hex_views.retain(|hv| {
                 calc_diff = calc_diff || hv.closed;
                 let delete: bool = { hv.closed };
