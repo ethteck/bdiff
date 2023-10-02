@@ -421,127 +421,126 @@ impl HexView {
     ) {
         let font_size = 14.0;
 
-        egui::Window::new(format!(
-            "{}",
-            self.file.path.file_name().unwrap().to_str().unwrap()
-        ))
-        .id(Id::new(format!("hex_view_window_{}", self.id)))
-        .title_bar(false)
-        .resizable(false)
-        .show(ctx, |ui| {
-            let file_name = self.file.path.as_path().to_str().unwrap();
+        egui::Window::new(self.file.path.to_str().unwrap())
+            .id(Id::new(format!("hex_view_window_{}", self.id)))
+            .title_bar(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                let file_name = self.file.path.as_path().to_str().unwrap();
 
-            ui.with_layout(
-                egui::Layout::left_to_right(eframe::emath::Align::Min),
-                |ui| {
-                    ui.label(
-                        egui::RichText::new(file_name)
-                            .monospace()
-                            .size(font_size)
-                            .color(Color32::LIGHT_GRAY),
-                    );
-
-                    ui.menu_button("...", |ui| {
-                        ui.checkbox(&mut self.show_selection_info, "Selection info");
-                        ui.checkbox(&mut self.show_cursor_info, "Cursor info");
-                        ui.checkbox(&mut self.dv.show, "Data viewer");
-                        ui.checkbox(&mut self.sv.show, "String viewer");
-                        ui.checkbox(&mut self.mt.show, "Map tool");
-                    });
-
-                    if ui.button("X").on_hover_text("Close").clicked() {
-                        self.closed = true;
-                    }
-                },
-            );
-
-            ui.with_layout(
-                egui::Layout::left_to_right(eframe::emath::Align::Min),
-                |ui: &mut egui::Ui| {
-                    ui.vertical(|ui| {
-                        self.show_hex_grid(
-                            diff_state,
-                            ctx,
-                            ui,
-                            cursor_state,
-                            can_selection_change,
-                            font_size,
+                ui.with_layout(
+                    egui::Layout::left_to_right(eframe::emath::Align::Min),
+                    |ui| {
+                        ui.label(
+                            egui::RichText::new(file_name)
+                                .monospace()
+                                .size(font_size)
+                                .color(Color32::LIGHT_GRAY),
                         );
 
-                        if self.show_selection_info {
-                            let selection_text = match self.selection.state {
-                                HexViewSelectionState::None => "No selection".to_owned(),
-                                _ => {
-                                    let start = self.selection.start();
-                                    let end = self.selection.end();
-                                    let length = end - start + 1;
+                        ui.menu_button("...", |ui| {
+                            ui.checkbox(&mut self.show_selection_info, "Selection info");
+                            ui.checkbox(&mut self.show_cursor_info, "Cursor info");
+                            ui.checkbox(&mut self.dv.show, "Data viewer");
+                            ui.checkbox(&mut self.sv.show, "String viewer");
+                            ui.checkbox(&mut self.mt.show, "Map tool");
+                        });
 
-                                    let map_entry = match self.mt.map_file {
-                                        Some(ref map_file) => map_file.get_entry(start, end + 1),
-                                        None => None,
-                                    };
-
-                                    let beginning = match length {
-                                        1 => {
-                                            format!("Selection: 0x{:X}", start)
-                                        }
-                                        _ => {
-                                            format!(
-                                                "Selection: 0x{:X} - 0x{:X} (len 0x{:X})",
-                                                start, end, length
-                                            )
-                                        }
-                                    };
-
-                                    match map_entry {
-                                        Some(entry) => {
-                                            format!(
-                                                "{} ({} + 0x{})",
-                                                beginning,
-                                                entry.symbol_name,
-                                                start - entry.symbol_vrom
-                                            )
-                                        }
-                                        None => beginning,
-                                    }
-                                }
-                            };
-                            ui.label(egui::RichText::new(selection_text).monospace());
+                        if ui.button("X").on_hover_text("Close").clicked() {
+                            self.closed = true;
                         }
+                    },
+                );
 
-                        if self.show_cursor_info {
-                            let hover_text = match self.cursor_pos {
-                                Some(pos) => {
-                                    let map_entry = match self.mt.map_file {
-                                        Some(ref map_file) => map_file.get_entry(pos, pos + 1),
-                                        None => None,
-                                    };
+                ui.with_layout(
+                    egui::Layout::left_to_right(eframe::emath::Align::Min),
+                    |ui: &mut egui::Ui| {
+                        ui.vertical(|ui| {
+                            self.show_hex_grid(
+                                diff_state,
+                                ctx,
+                                ui,
+                                cursor_state,
+                                can_selection_change,
+                                font_size,
+                            );
 
-                                    match map_entry {
-                                        Some(entry) => {
-                                            format!(
-                                                "Cursor: 0x{:X} ({} + 0x{})",
-                                                pos,
-                                                entry.symbol_name,
-                                                pos - entry.symbol_vrom
-                                            )
+                            if self.show_selection_info {
+                                let selection_text = match self.selection.state {
+                                    HexViewSelectionState::None => "No selection".to_owned(),
+                                    _ => {
+                                        let start = self.selection.start();
+                                        let end = self.selection.end();
+                                        let length = end - start + 1;
+
+                                        let map_entry = match self.mt.map_file {
+                                            Some(ref map_file) => {
+                                                map_file.get_entry(start, end + 1)
+                                            }
+                                            None => None,
+                                        };
+
+                                        let beginning = match length {
+                                            1 => {
+                                                format!("Selection: 0x{:X}", start)
+                                            }
+                                            _ => {
+                                                format!(
+                                                    "Selection: 0x{:X} - 0x{:X} (len 0x{:X})",
+                                                    start, end, length
+                                                )
+                                            }
+                                        };
+
+                                        match map_entry {
+                                            Some(entry) => {
+                                                format!(
+                                                    "{} ({} + 0x{})",
+                                                    beginning,
+                                                    entry.symbol_name,
+                                                    start - entry.symbol_vrom
+                                                )
+                                            }
+                                            None => beginning,
                                         }
-                                        None => format!("Cursor: 0x{:X}", pos),
                                     }
-                                }
-                                None => "Not hovering".to_owned(),
-                            };
-                            ui.label(egui::RichText::new(hover_text).monospace());
-                        }
-                    });
+                                };
+                                ui.label(egui::RichText::new(selection_text).monospace());
+                            }
 
-                    ui.with_layout(egui::Layout::top_down(eframe::emath::Align::Min), |ui| {
-                        self.dv.display(ui, self.id, self.get_selected_bytes());
-                        self.sv.display(ui, self.id, self.get_selected_bytes());
-                        self.mt.display(ui);
-                    });
-                },
-            );
-        });
+                            if self.show_cursor_info {
+                                let hover_text = match self.cursor_pos {
+                                    Some(pos) => {
+                                        let map_entry = match self.mt.map_file {
+                                            Some(ref map_file) => map_file.get_entry(pos, pos + 1),
+                                            None => None,
+                                        };
+
+                                        match map_entry {
+                                            Some(entry) => {
+                                                format!(
+                                                    "Cursor: 0x{:X} ({} + 0x{})",
+                                                    pos,
+                                                    entry.symbol_name,
+                                                    pos - entry.symbol_vrom
+                                                )
+                                            }
+                                            None => format!("Cursor: 0x{:X}", pos),
+                                        }
+                                    }
+                                    None => "Not hovering".to_owned(),
+                                };
+                                ui.label(egui::RichText::new(hover_text).monospace());
+                            }
+                        });
+
+                        ui.with_layout(egui::Layout::top_down(eframe::emath::Align::Min), |ui| {
+                            self.dv.display(ui, self.id, self.get_selected_bytes());
+                            self.sv.display(ui, self.id, self.get_selected_bytes());
+                            self.mt.display(ui);
+                        });
+                    },
+                );
+            });
     }
 }
