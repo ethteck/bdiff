@@ -27,11 +27,11 @@ To provide a more convenient experience, projects can specify a "bdiff.json" con
     "files": [
         {
             "path": "C:\\somethin.z64",
-            "map": "C:\\somethin_map.json"
+            "map": "C:\\somethin.map"
         },
         {
             "path": "C:\\another.z64",
-            "map": "C:\\another_map.json"
+            "map": "C:\\another.map"
         }
     ]
 }
@@ -42,4 +42,4 @@ So far, the configuration format simply consists of a list of files to open (`fi
 For each file, there are two fields:
 
 * `path`: The path to the file
-* `map` (optional): The path to a json representation of a .map file, output from [mapfile_parser](https://github.com/Decompollaborate/mapfile_parser)
+* `map` (optional): The path to a .map file, to be parsed so symbol information is displayed in the viewer

@@ -1,59 +1,24 @@
 use std::{
-    fs,
     path::PathBuf,
     sync::{atomic::AtomicBool, Arc},
 };
 
 use anyhow::Error;
 use iset::IntervalMap;
-use serde::Deserialize;
 
 use crate::watcher::create_watcher;
-
-#[derive(Deserialize, Debug)]
-struct MapFileJsonSymbol {
-    name: String,
-    vram: usize,
-    vrom: Option<usize>,
-    size: Option<usize>,
-}
-
-#[derive(Deserialize, Debug)]
-struct MapFileJsonFile {
-    filepath: Option<String>,
-    #[serde(rename = "camelCase")]
-    section_type: Option<String>,
-    vram: usize,
-    vrom: Option<usize>,
-    size: usize,
-    symbols: Vec<MapFileJsonSymbol>,
-}
-
-#[derive(Deserialize, Debug)]
-struct MapFileJsonSegment {
-    name: String,
-    vram: usize,
-    vrom: usize,
-    size: usize,
-    files: Vec<MapFileJsonFile>,
-}
-
-#[derive(Deserialize, Debug)]
-struct MapFileJson {
-    segments: Vec<MapFileJsonSegment>,
-}
 
 #[derive(Clone, Debug)]
 pub struct MapFileEntry {
     pub seg_name: String,
-    pub seg_vram: usize,
-    pub seg_vrom: usize,
-    pub seg_size: usize,
-    pub file_path: Option<String>,
-    pub file_section_type: Option<String>,
-    pub file_vram: usize,
-    pub file_vrom: Option<usize>,
-    pub file_size: usize,
+    pub seg_vram: u64,
+    pub seg_vrom: u64,
+    pub seg_size: u64,
+    pub file_path: PathBuf,
+    pub file_section_type: String,
+    pub file_vram: u64,
+    pub file_vrom: Option<u64>,
+    pub file_size: u64,
     pub symbol_name: String,
     pub symbol_vram: usize,
     pub symbol_vrom: usize,
@@ -70,11 +35,7 @@ pub struct MapFile {
 
 impl MapFile {
     pub fn from_path(path: PathBuf) -> Result<Self, Error> {
-        let s = fs::read_to_string(path.clone())?;
-
-        let json: MapFileJson = serde_json::from_str(&s)?;
-
-        let data = collect_data(&json);
+        let data = collect_data(path.clone());
 
         let mut ret = Self {
             path: path.clone(),
@@ -94,11 +55,7 @@ impl MapFile {
     }
 
     pub fn reload(&mut self) -> Result<(), Error> {
-        let s = fs::read_to_string(self.path.clone())?;
-
-        let json: MapFileJson = serde_json::from_str(&s)?;
-
-        self.data = collect_data(&json);
+        self.data = collect_data(self.path.clone());
 
         Ok(())
     }
@@ -118,11 +75,15 @@ impl MapFile {
     }
 }
 
-fn collect_data(json: &MapFileJson) -> IntervalMap<usize, MapFileEntry> {
+fn collect_data(path: PathBuf) -> IntervalMap<usize, MapFileEntry> {
     let mut ret: IntervalMap<usize, MapFileEntry> = IntervalMap::new();
 
-    for segment in &json.segments {
-        for file in &segment.files {
+    let mut mf: mapfile_parser::MapFile = mapfile_parser::MapFile::new();
+
+    mf.read_map_file(path);
+
+    for segment in &mf.segments_list {
+        for file in &segment.files_list {
             for symbol in &file.symbols {
                 if symbol.vrom.is_none() || symbol.size.is_none() || symbol.size.unwrap() == 0 {
                     continue;
@@ -139,9 +100,9 @@ fn collect_data(json: &MapFileJson) -> IntervalMap<usize, MapFileEntry> {
                     file_vrom: file.vrom,
                     file_size: file.size,
                     symbol_name: symbol.name.clone(),
-                    symbol_vram: symbol.vram,
-                    symbol_vrom: symbol.vrom.unwrap(),
-                    symbol_size: symbol.size.unwrap(),
+                    symbol_vram: symbol.vram as usize,
+                    symbol_vrom: symbol.vrom.unwrap() as usize,
+                    symbol_size: symbol.size.unwrap() as usize,
                 };
 
                 ret.insert(

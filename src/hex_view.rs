@@ -424,7 +424,6 @@ impl HexView {
         egui::Window::new(self.file.path.to_str().unwrap())
             .id(Id::new(format!("hex_view_window_{}", self.id)))
             .title_bar(false)
-            .resizable(false)
             .show(ctx, |ui| {
                 let file_name = self.file.path.as_path().to_str().unwrap();
 
