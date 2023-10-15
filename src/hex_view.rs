@@ -127,10 +127,16 @@ impl HexView {
     }
 
     pub fn set_cur_pos(&mut self, val: usize) {
+        if self.pos_locked {
+            return;
+        }
         self.cur_pos = val.clamp(0, self.file.data.len() - self.bytes_per_row);
     }
 
     pub fn adjust_cur_pos(&mut self, delta: isize) {
+        if self.pos_locked {
+            return;
+        }
         self.cur_pos = (self.cur_pos as isize + delta).clamp(
             0,
             self.file.data.len() as isize - self.bytes_per_row as isize,
@@ -436,6 +442,22 @@ impl HexView {
                                 .size(font_size)
                                 .color(Color32::LIGHT_GRAY),
                         );
+
+                        let (lock_text, hover_text) = match self.pos_locked {
+                            true => (
+                                egui::RichText::new(egui_phosphor::regular::LOCK_SIMPLE)
+                                    .color(Color32::RED),
+                                "Unlock scroll position",
+                            ),
+                            false => (
+                                egui::RichText::new(egui_phosphor::regular::LOCK_SIMPLE_OPEN)
+                                    .color(Color32::GREEN),
+                                "Lock scroll position",
+                            ),
+                        };
+                        if ui.button(lock_text).on_hover_text(hover_text).clicked() {
+                            self.pos_locked = !self.pos_locked;
+                        }
 
                         ui.menu_button("...", |ui| {
                             ui.checkbox(&mut self.show_selection_info, "Selection info");
