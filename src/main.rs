@@ -8,9 +8,9 @@ mod diff_state;
 mod hex_view;
 mod map_file;
 mod map_tool;
-mod spacer;
 mod string_viewer;
 mod watcher;
+mod widget;
 
 use std::path::PathBuf;
 

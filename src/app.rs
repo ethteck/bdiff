@@ -14,7 +14,7 @@ use crate::{
     bin_file::BinFile,
     config::read_json_config,
     diff_state::DiffState,
-    hex_view::{HexView, HexViewSelection, HexViewSelectionState},
+    hex_view::{HexView, HexViewSelection, HexViewSelectionSide, HexViewSelectionState},
 };
 
 #[derive(Default)]
@@ -278,7 +278,12 @@ impl eframe::App for BdiffApp {
             extrusion: 0.0,
             color: egui::Color32::TRANSPARENT,
         };
+        style.visuals.window_shadow = Shadow {
+            extrusion: 0.0,
+            color: egui::Color32::TRANSPARENT,
+        };
         style.visuals.menu_rounding = Rounding::default();
+        style.visuals.window_rounding = Rounding::default();
         ctx.set_style(style);
 
         let cursor_state: CursorState = ctx.input(|i| {
@@ -311,6 +316,35 @@ impl eframe::App for BdiffApp {
             } else {
                 self.goto_modal.value = "0x".to_owned();
                 goto_modal.open();
+            }
+        }
+
+        // Copy selection
+        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::C)) {
+            let mut selection = String::new();
+
+            for hv in self.hex_views.iter() {
+                if self.last_selected_hv.is_some() && hv.id == self.last_selected_hv.unwrap() {
+                    let selected_bytes = hv.get_selected_bytes();
+
+                    let selected_bytes: String = match hv.selection.side {
+                        HexViewSelectionSide::Hex => selected_bytes
+                            .iter()
+                            .map(|b| format!("{:02X}", b))
+                            .collect::<Vec<String>>()
+                            .join(" "),
+                        HexViewSelectionSide::Ascii => {
+                            String::from_utf8_lossy(&selected_bytes).to_string()
+                        }
+                    };
+                    // convert selected_bytes to an ascii string
+
+                    selection.push_str(&selected_bytes.to_string());
+                }
+            }
+
+            if !selection.is_empty() {
+                ctx.output_mut(|o| o.copied_text = selection);
             }
         }
 

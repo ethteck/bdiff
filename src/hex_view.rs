@@ -5,10 +5,9 @@ use eframe::{
 };
 
 use crate::{
-    app::CursorState, bin_file::read_file_bytes, data_viewer::DataViewer, diff_state::DiffState,
-    map_tool::MapTool, string_viewer::StringViewer,
+    app::CursorState, bin_file::read_file_bytes, bin_file::BinFile, data_viewer::DataViewer,
+    diff_state::DiffState, map_tool::MapTool, string_viewer::StringViewer, widget::spacer::Spacer,
 };
-use crate::{bin_file::BinFile, spacer::Spacer};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HexViewSelectionRange {
@@ -24,10 +23,18 @@ pub enum HexViewSelectionState {
     Selected,
 }
 
+#[derive(Clone, Default, Debug, PartialEq)]
+pub enum HexViewSelectionSide {
+    #[default]
+    Hex,
+    Ascii,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct HexViewSelection {
     pub range: HexViewSelectionRange,
     pub state: HexViewSelectionState,
+    pub side: HexViewSelectionSide,
 }
 
 impl HexViewSelection {
@@ -45,10 +52,11 @@ impl HexViewSelection {
             && grid_pos <= self.end()
     }
 
-    pub fn begin(&mut self, grid_pos: usize) {
+    pub fn begin(&mut self, grid_pos: usize, side: HexViewSelectionSide) {
         self.range.first = grid_pos;
         self.range.second = grid_pos;
         self.state = HexViewSelectionState::Selecting;
+        self.side = side;
     }
 
     pub fn update(&mut self, grid_pos: usize) {
@@ -64,6 +72,7 @@ impl HexViewSelection {
         self.range.first = 0;
         self.range.second = 0;
         self.state = HexViewSelectionState::None;
+        self.side = HexViewSelectionSide::default();
     }
 
     pub fn adjust_cur_pos(&mut self, delta: isize) {
@@ -201,7 +210,7 @@ impl HexView {
 
                         let mut r = 0;
                         while r < self.num_rows {
-                            let row = row_chunks.next().unwrap_or_default();
+                            let row: &[u8] = row_chunks.next().unwrap_or_default();
 
                             let num_digits = match self.file.data.len() {
                                 //0..=0xFFFF => 4,
@@ -299,6 +308,7 @@ impl HexView {
                                             cursor_state,
                                             row_current_pos,
                                             ctx,
+                                            HexViewSelectionSide::Hex,
                                         );
                                     }
                                 }
@@ -358,6 +368,7 @@ impl HexView {
                                             cursor_state,
                                             row_current_pos,
                                             ctx,
+                                            HexViewSelectionSide::Ascii,
                                         );
                                     }
                                 }
@@ -386,10 +397,11 @@ impl HexView {
         cursor_state: CursorState,
         row_current_pos: usize,
         ctx: &egui::Context,
+        side: HexViewSelectionSide,
     ) {
         if res.hovered() {
             if cursor_state == CursorState::Pressed {
-                self.selection.begin(row_current_pos);
+                self.selection.begin(row_current_pos, side);
             }
 
             self.cursor_pos = Some(row_current_pos);
