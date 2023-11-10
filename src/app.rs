@@ -324,6 +324,14 @@ impl eframe::App for BdiffApp {
             }
         }
 
+        // Open dropped files
+        if ctx.input(|i| i.raw.dropped_files.len() > 0) {
+            for file in ctx.input(|i| i.raw.dropped_files.clone()) {
+                let _ = self.open_file(file.path.unwrap());
+                self.diff_state.recalculate(&self.hex_views);
+            }
+        }
+
         // Copy selection
         if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::C)) {
             let mut selection = String::new();
