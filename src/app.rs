@@ -325,7 +325,7 @@ impl eframe::App for BdiffApp {
         }
 
         // Open dropped files
-        if ctx.input(|i| i.raw.dropped_files.len() > 0) {
+        if ctx.input(|i| !i.raw.dropped_files.is_empty()) {
             for file in ctx.input(|i| i.raw.dropped_files.clone()) {
                 let _ = self.open_file(file.path.unwrap());
                 self.diff_state.recalculate(&self.hex_views);
@@ -450,6 +450,11 @@ impl eframe::App for BdiffApp {
                 for hv in self.hex_views.iter_mut() {
                     if hv.selection != self.global_selection {
                         hv.selection = self.global_selection.clone();
+                        if hv.selection.start() >= hv.file.data.len()
+                            || hv.selection.end() >= hv.file.data.len()
+                        {
+                            hv.selection.clear()
+                        }
                     }
                 }
             }
