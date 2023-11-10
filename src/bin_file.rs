@@ -9,10 +9,18 @@ use anyhow::Error;
 
 use crate::watcher::create_watcher;
 
-#[derive(Default, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
+pub enum Endianness {
+    Little,
+    #[default]
+    Big,
+}
+
+#[derive(Debug, Default)]
 pub struct BinFile {
     pub path: PathBuf,
     pub data: Vec<u8>,
+    pub endianness: Endianness,
     watcher: Option<notify::RecommendedWatcher>,
     pub modified: Arc<AtomicBool>,
 }

@@ -42,4 +42,4 @@ So far, the configuration format simply consists of a list of files to open (`fi
 For each file, there are two fields:
 
 * `path`: The path to the file
-* `map` (optional): The path to a .map file, to be parsed so symbol information is displayed in the viewer
+* `map` (optional): The path to a GNU ld or Clang lld .map file, to be parsed so symbol information is displayed in the viewer

@@ -1,5 +1,7 @@
 use eframe::egui;
 
+use crate::bin_file::Endianness;
+
 pub struct DataViewer {
     pub show: bool,
     pub s8: bool,
@@ -56,7 +58,13 @@ fn display_type(
 }
 
 impl DataViewer {
-    pub fn display(&mut self, ui: &mut egui::Ui, hv_id: usize, selected_bytes: Vec<u8>) {
+    pub fn display(
+        &mut self,
+        ui: &mut egui::Ui,
+        hv_id: usize,
+        selected_bytes: Vec<u8>,
+        endianness: Endianness,
+    ) {
         if !self.show {
             return;
         }
@@ -88,12 +96,19 @@ impl DataViewer {
                 egui::Grid::new(format!("hex_grid_selection{}", hv_id))
                     .striped(true)
                     .num_columns(2)
-                    .show(ui, |ui| self.display_data_types(ui, selected_bytes));
+                    .show(ui, |ui| {
+                        self.display_data_types(ui, selected_bytes, endianness)
+                    });
             });
         });
     }
 
-    fn display_data_types(&mut self, ui: &mut egui::Ui, selected_bytes: Vec<u8>) {
+    fn display_data_types(
+        &mut self,
+        ui: &mut egui::Ui,
+        selected_bytes: Vec<u8>,
+        endianness: Endianness,
+    ) {
         let mut float_buffer = dtoa::Buffer::new();
         let delimiter = ", ";
 
@@ -106,7 +121,11 @@ impl DataViewer {
             |chunk| {
                 format!(
                     "{:}",
-                    i8::from_be_bytes(chunk.try_into().unwrap_or_default())
+                    match endianness {
+                        Endianness::Little =>
+                            i8::from_le_bytes(chunk.try_into().unwrap_or_default()),
+                        Endianness::Big => i8::from_be_bytes(chunk.try_into().unwrap_or_default()),
+                    }
                 )
             },
             delimiter,
@@ -121,7 +140,11 @@ impl DataViewer {
             |chunk| {
                 format!(
                     "{:}",
-                    u8::from_be_bytes(chunk.try_into().unwrap_or_default())
+                    match endianness {
+                        Endianness::Little =>
+                            u8::from_le_bytes(chunk.try_into().unwrap_or_default()),
+                        Endianness::Big => u8::from_be_bytes(chunk.try_into().unwrap_or_default()),
+                    }
                 )
             },
             delimiter,
@@ -136,7 +159,11 @@ impl DataViewer {
             |chunk| {
                 format!(
                     "{:}",
-                    i16::from_be_bytes(chunk.try_into().unwrap_or_default())
+                    match endianness {
+                        Endianness::Little =>
+                            i16::from_le_bytes(chunk.try_into().unwrap_or_default()),
+                        Endianness::Big => i16::from_be_bytes(chunk.try_into().unwrap_or_default()),
+                    }
                 )
             },
             delimiter,
@@ -151,7 +178,11 @@ impl DataViewer {
             |chunk| {
                 format!(
                     "{:}",
-                    u16::from_be_bytes(chunk.try_into().unwrap_or_default())
+                    match endianness {
+                        Endianness::Little =>
+                            u16::from_le_bytes(chunk.try_into().unwrap_or_default()),
+                        Endianness::Big => u16::from_be_bytes(chunk.try_into().unwrap_or_default()),
+                    }
                 )
             },
             delimiter,
@@ -166,7 +197,11 @@ impl DataViewer {
             |chunk| {
                 format!(
                     "{:}",
-                    i32::from_be_bytes(chunk.try_into().unwrap_or_default())
+                    match endianness {
+                        Endianness::Little =>
+                            i32::from_le_bytes(chunk.try_into().unwrap_or_default()),
+                        Endianness::Big => i32::from_be_bytes(chunk.try_into().unwrap_or_default()),
+                    }
                 )
             },
             delimiter,
@@ -181,7 +216,11 @@ impl DataViewer {
             |chunk| {
                 format!(
                     "{:}",
-                    u32::from_be_bytes(chunk.try_into().unwrap_or_default())
+                    match endianness {
+                        Endianness::Little =>
+                            u32::from_le_bytes(chunk.try_into().unwrap_or_default()),
+                        Endianness::Big => u32::from_be_bytes(chunk.try_into().unwrap_or_default()),
+                    }
                 )
             },
             delimiter,
@@ -195,7 +234,12 @@ impl DataViewer {
             4,
             |chunk| {
                 float_buffer
-                    .format(f32::from_be_bytes(chunk.try_into().unwrap_or_default()))
+                    .format(match endianness {
+                        Endianness::Little => {
+                            f32::from_le_bytes(chunk.try_into().unwrap_or_default())
+                        }
+                        Endianness::Big => f32::from_be_bytes(chunk.try_into().unwrap_or_default()),
+                    })
                     .to_string()
             },
             delimiter,
@@ -210,7 +254,11 @@ impl DataViewer {
             |chunk| {
                 format!(
                     "{:}",
-                    i64::from_be_bytes(chunk.try_into().unwrap_or_default())
+                    match endianness {
+                        Endianness::Little =>
+                            i64::from_le_bytes(chunk.try_into().unwrap_or_default()),
+                        Endianness::Big => i64::from_be_bytes(chunk.try_into().unwrap_or_default()),
+                    }
                 )
             },
             delimiter,
@@ -225,7 +273,11 @@ impl DataViewer {
             |chunk| {
                 format!(
                     "{:}",
-                    u64::from_be_bytes(chunk.try_into().unwrap_or_default())
+                    match endianness {
+                        Endianness::Little =>
+                            u64::from_le_bytes(chunk.try_into().unwrap_or_default()),
+                        Endianness::Big => u64::from_be_bytes(chunk.try_into().unwrap_or_default()),
+                    }
                 )
             },
             delimiter,
@@ -239,7 +291,12 @@ impl DataViewer {
             8,
             |chunk| {
                 float_buffer
-                    .format(f64::from_be_bytes(chunk.try_into().unwrap_or_default()))
+                    .format(match endianness {
+                        Endianness::Little => {
+                            f64::from_le_bytes(chunk.try_into().unwrap_or_default())
+                        }
+                        Endianness::Big => f64::from_be_bytes(chunk.try_into().unwrap_or_default()),
+                    })
                     .to_string()
             },
             delimiter,

@@ -457,14 +457,28 @@ impl eframe::App for BdiffApp {
         // File reloading
         for hv in self.hex_views.iter_mut() {
             if hv.file.modified.swap(false, Ordering::Relaxed) {
-                let _ = hv.reload_file();
-                calc_diff = true;
+                match hv.reload_file() {
+                    Ok(_) => {
+                        log::info!("Reloaded file {}", hv.file.path.display());
+                        calc_diff = true;
+                    }
+                    Err(e) => {
+                        log::error!("Failed to reload file: {}", e);
+                    }
+                }
             }
 
             if hv.mt.map_file.is_some() {
                 let map_file = hv.mt.map_file.as_mut().unwrap();
                 if map_file.modified.swap(false, Ordering::Relaxed) {
-                    let _ = map_file.reload();
+                    match map_file.reload() {
+                        Ok(_) => {
+                            log::info!("Reloaded map file {}", map_file.path.display());
+                        }
+                        Err(e) => {
+                            log::error!("Failed to reload map file: {}", e);
+                        }
+                    }
                 }
             }
         }

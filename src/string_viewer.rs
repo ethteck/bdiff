@@ -1,6 +1,8 @@
 use eframe::egui;
 use encoding_rs::*;
 
+use crate::bin_file::Endianness;
+
 pub struct StringViewer {
     pub show: bool,
     pub utf8: bool,
@@ -22,7 +24,13 @@ impl Default for StringViewer {
 }
 
 impl StringViewer {
-    pub fn display(&mut self, ui: &mut egui::Ui, hv_id: usize, selected_bytes: Vec<u8>) {
+    pub fn display(
+        &mut self,
+        ui: &mut egui::Ui,
+        hv_id: usize,
+        selected_bytes: Vec<u8>,
+        endianness: Endianness,
+    ) {
         if !self.show {
             return;
         }
@@ -57,9 +65,14 @@ impl StringViewer {
                     }
 
                     if self.utf16 {
+                        let encoding = match endianness {
+                            Endianness::Little => UTF_16LE,
+                            Endianness::Big => UTF_16BE,
+                        };
+
                         ui.add(egui::Label::new(egui::RichText::new("UTF-16").monospace()));
                         ui.text_edit_singleline(
-                            &mut UTF_16BE
+                            &mut encoding
                                 .decode_without_bom_handling_and_without_replacement(
                                     &selected_bytes,
                                 )

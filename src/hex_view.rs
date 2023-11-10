@@ -5,8 +5,14 @@ use eframe::{
 };
 
 use crate::{
-    app::CursorState, bin_file::read_file_bytes, bin_file::BinFile, data_viewer::DataViewer,
-    diff_state::DiffState, map_tool::MapTool, string_viewer::StringViewer, widget::spacer::Spacer,
+    app::CursorState,
+    bin_file::BinFile,
+    bin_file::{read_file_bytes, Endianness},
+    data_viewer::DataViewer,
+    diff_state::DiffState,
+    map_tool::MapTool,
+    string_viewer::StringViewer,
+    widget::spacer::Spacer,
 };
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -471,6 +477,27 @@ impl HexView {
                             self.pos_locked = !self.pos_locked;
                         }
 
+                        match self.file.endianness {
+                            Endianness::Little => {
+                                if ui
+                                    .button("LE")
+                                    .on_hover_text("Switch to big-endian")
+                                    .clicked()
+                                {
+                                    self.file.endianness = Endianness::Big;
+                                }
+                            }
+                            Endianness::Big => {
+                                if ui
+                                    .button("BE")
+                                    .on_hover_text("Switch to little-endian")
+                                    .clicked()
+                                {
+                                    self.file.endianness = Endianness::Little;
+                                }
+                            }
+                        }
+
                         ui.menu_button("...", |ui| {
                             ui.checkbox(&mut self.show_selection_info, "Selection info");
                             ui.checkbox(&mut self.show_cursor_info, "Cursor info");
@@ -568,8 +595,18 @@ impl HexView {
                         });
 
                         ui.with_layout(egui::Layout::top_down(eframe::emath::Align::Min), |ui| {
-                            self.dv.display(ui, self.id, self.get_selected_bytes());
-                            self.sv.display(ui, self.id, self.get_selected_bytes());
+                            self.dv.display(
+                                ui,
+                                self.id,
+                                self.get_selected_bytes(),
+                                self.file.endianness,
+                            );
+                            self.sv.display(
+                                ui,
+                                self.id,
+                                self.get_selected_bytes(),
+                                self.file.endianness,
+                            );
                             self.mt.display(ui);
                         });
                     },
