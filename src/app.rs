@@ -72,10 +72,15 @@ impl BdiffApp {
                 let config = read_json_config(config_path).unwrap();
 
                 for file in config.files {
-                    let hv = ret.open_file(file.path).unwrap();
-
-                    if let Some(map) = file.map {
-                        hv.mt.load_file(&map);
+                    match ret.open_file(file.path) {
+                        Ok(hv) => {
+                            if let Some(map) = file.map {
+                                hv.mt.load_file(&map);
+                            }
+                        }
+                        Err(e) => {
+                            log::error!("Failed to open file: {}", e);
+                        }
                     }
                 }
             }

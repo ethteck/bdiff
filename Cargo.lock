@@ -1672,10 +1672,11 @@ dependencies = [
 
 [[package]]
 name = "mapfile_parser"
-version = "2.2.1"
+version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95cbbe7b01693bc2e3036fe78ecc34929bef89835fd46b2fe343078898510c75"
+checksum = "2d3cd676059ac78e98a51a808ce2037535c920b210d709055b74ceda71b05eb4"
 dependencies = [
+ "lazy_static",
  "pyo3",
  "regex",
 ]
@@ -2922,9 +2923,9 @@ checksum = "f1bddf1187be692e79c5ffeab891132dfb0f236ed36a43c7ed39f1165ee20191"
 
 [[package]]
 name = "vergen"
-version = "8.2.5"
+version = "8.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85e7dc29b3c54a2ea67ef4f953d5ec0c4085035c0ae2d325be1c0d2144bd9f16"
+checksum = "1290fd64cc4e7d3c9b07d7f333ce0ce0007253e32870e632624835cc80b83939"
 dependencies = [
  "anyhow",
  "rustversion",
