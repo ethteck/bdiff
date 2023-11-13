@@ -145,17 +145,19 @@ impl HexView {
         if self.pos_locked {
             return;
         }
-        self.cur_pos = val.clamp(0, self.file.data.len() - self.bytes_per_row);
+        let last_line_start_address =
+            (self.file.data.len() / self.bytes_per_row) * self.bytes_per_row;
+        self.cur_pos = val.clamp(0, last_line_start_address);
     }
 
     pub fn adjust_cur_pos(&mut self, delta: isize) {
         if self.pos_locked {
             return;
         }
-        self.cur_pos = (self.cur_pos as isize + delta).clamp(
-            0,
-            self.file.data.len() as isize - self.bytes_per_row as isize,
-        ) as usize;
+        let last_line_start_address =
+            (self.file.data.len() / self.bytes_per_row) * self.bytes_per_row;
+        self.cur_pos =
+            (self.cur_pos as isize + delta).clamp(0, last_line_start_address as isize) as usize;
     }
 
     pub fn bytes_per_screen(&self) -> usize {
