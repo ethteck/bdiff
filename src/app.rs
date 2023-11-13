@@ -15,6 +15,7 @@ use crate::{
     config::read_json_config,
     diff_state::DiffState,
     hex_view::{HexView, HexViewSelection, HexViewSelectionSide, HexViewSelectionState},
+    settings::{ByteGrouping, Settings},
 };
 
 #[derive(Default)]
@@ -46,6 +47,8 @@ pub struct BdiffApp {
     global_selection: HexViewSelection, // the selection that all hex views will mirror
     selecting_hv: Option<usize>,
     last_selected_hv: Option<usize>,
+    settings_open: bool,
+    settings: Settings,
 }
 
 impl BdiffApp {
@@ -225,6 +228,28 @@ impl BdiffApp {
             }
         }
     }
+
+    fn show_settings(&mut self, ctx: &egui::Context) {
+        egui::Window::new("Settings").show(ctx, |ui| {
+            egui::ComboBox::from_label("Byte grouping")
+                .selected_text(self.settings.byte_grouping.to_string())
+                .show_ui(ui, |ui| {
+                    let mut add_value = |value: ByteGrouping| {
+                        ui.selectable_value(
+                            &mut self.settings.byte_grouping,
+                            value,
+                            value.to_string(),
+                        );
+                    };
+                    add_value(ByteGrouping::One);
+                    add_value(ByteGrouping::Two);
+                    add_value(ByteGrouping::Four);
+                    add_value(ByteGrouping::Eight);
+                    add_value(ByteGrouping::Sixteen);
+                    add_value(ByteGrouping::ThirtyTwo);
+                });
+        });
+    }
 }
 
 fn set_up_custom_fonts(ctx: &egui::Context) {
@@ -392,7 +417,10 @@ impl eframe::App for BdiffApp {
                         self.diff_state.recalculate(&self.hex_views);
                     }
 
-                    ui.add_enabled(self.hex_views.len() > 1, mirror_selection_checkbox)
+                    ui.add_enabled(self.hex_views.len() > 1, mirror_selection_checkbox);
+                    if ui.button("Settings").clicked() {
+                        self.settings_open = !self.settings_open;
+                    }
                 });
                 ui.menu_button("Action", |ui| {
                     if ui.button("Go to address (G)").clicked() {
@@ -416,7 +444,13 @@ impl eframe::App for BdiffApp {
                     Some(id) => id == hv.id,
                     None => true,
                 };
-                hv.show(&self.diff_state, ctx, cursor_state, can_selection_change);
+                hv.show(
+                    &self.settings,
+                    &self.diff_state,
+                    ctx,
+                    cursor_state,
+                    can_selection_change,
+                );
                 if hv.selection != cur_sel {
                     match hv.selection.state {
                         HexViewSelectionState::Selecting => {
@@ -498,6 +532,10 @@ impl eframe::App for BdiffApp {
 
         if calc_diff {
             self.diff_state.recalculate(&self.hex_views);
+        }
+
+        if self.settings_open {
+            self.show_settings(ctx);
         }
     }
 }

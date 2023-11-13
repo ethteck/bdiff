@@ -11,6 +11,7 @@ use crate::{
     data_viewer::DataViewer,
     diff_state::DiffState,
     map_tool::MapTool,
+    settings::Settings,
     string_viewer::StringViewer,
     widget::spacer::Spacer,
 };
@@ -202,6 +203,7 @@ impl HexView {
         cursor_state: CursorState,
         can_selection_change: bool,
         font_size: f32,
+        byte_grouping: usize,
     ) {
         let grid_rect = ui
             .group(|ui| {
@@ -263,7 +265,7 @@ impl HexView {
                             // hex view
                             let mut i = 0;
                             while i < self.bytes_per_row {
-                                if i > 0 && (i % 8) == 0 {
+                                if i > 0 && (i % byte_grouping) == 0 {
                                     ui.add(Spacer::default().spacing_x(4.0));
                                 }
                                 let row_current_pos = current_pos + i;
@@ -440,6 +442,7 @@ impl HexView {
 
     pub fn show(
         &mut self,
+        settings: &Settings,
         diff_state: &DiffState,
         ctx: &egui::Context,
         cursor_state: CursorState,
@@ -525,6 +528,7 @@ impl HexView {
                                 cursor_state,
                                 can_selection_change,
                                 font_size,
+                                settings.byte_grouping.into(),
                             );
 
                             if self.show_selection_info {
