@@ -4,13 +4,13 @@ use crate::bin_file::Endianness;
 
 pub struct DataViewer {
     pub show: bool,
-    pub s8: bool,
+    pub i8: bool,
     pub u8: bool,
-    pub s16: bool,
+    pub i16: bool,
     pub u16: bool,
-    pub s32: bool,
+    pub i32: bool,
     pub u32: bool,
-    pub s64: bool,
+    pub i64: bool,
     pub u64: bool,
     pub f32: bool,
     pub f64: bool,
@@ -20,13 +20,13 @@ impl Default for DataViewer {
     fn default() -> DataViewer {
         DataViewer {
             show: false,
-            s8: true,
+            i8: true,
             u8: true,
-            s16: true,
+            i16: true,
             u16: true,
-            s32: true,
+            i32: true,
             u32: true,
-            s64: false,
+            i64: false,
             u64: false,
             f32: true,
             f64: true,
@@ -57,6 +57,50 @@ fn display_type(
     }
 }
 
+macro_rules! create_display_type {
+    ($ui:expr, $selected_bytes:expr, $endianness:expr, $delimiter:expr, $represented_type:ty, $value:expr, $size:expr) => {
+        display_type(
+            $ui,
+            $selected_bytes,
+            $value,
+            stringify!($represented_type),
+            $size,
+            |chunk| {
+                format!(
+                    "{:}",
+                    match $endianness {
+                        Endianness::Little =>
+                            <$represented_type>::from_le_bytes(chunk.try_into().unwrap_or_default()),
+                        Endianness::Big =>
+                            <$represented_type>::from_be_bytes(chunk.try_into().unwrap_or_default()),
+                    }
+                )
+            },
+            $delimiter,
+        );
+    };
+    ($ui:expr, $selected_bytes:expr, $endianness:expr, $delimiter:expr, $represented_type:ty, $value:expr, $size:expr, $float_buffer:expr) => {
+        display_type(
+            $ui,
+            $selected_bytes,
+            $value,
+            stringify!($represented_type),
+            $size,
+            |chunk| {
+                $float_buffer
+                    .format(match $endianness {
+                        Endianness::Little => {
+                            f64::from_le_bytes(chunk.try_into().unwrap_or_default())
+                        }
+                        Endianness::Big => f64::from_be_bytes(chunk.try_into().unwrap_or_default()),
+                    })
+                    .to_string()
+            },
+            $delimiter,
+        );
+    };
+}
+
 impl DataViewer {
     pub fn display(
         &mut self,
@@ -79,13 +123,13 @@ impl DataViewer {
                         ));
 
                         ui.menu_button("...", |ui| {
-                            ui.checkbox(&mut self.s8, "s8");
+                            ui.checkbox(&mut self.i8, "s8");
                             ui.checkbox(&mut self.u8, "u8");
-                            ui.checkbox(&mut self.s16, "s16");
+                            ui.checkbox(&mut self.i16, "s16");
                             ui.checkbox(&mut self.u16, "u16");
-                            ui.checkbox(&mut self.s32, "s32");
+                            ui.checkbox(&mut self.i32, "s32");
                             ui.checkbox(&mut self.u32, "u32");
-                            ui.checkbox(&mut self.s64, "s64");
+                            ui.checkbox(&mut self.i64, "s64");
                             ui.checkbox(&mut self.u64, "u64");
                             ui.checkbox(&mut self.f32, "f32");
                             ui.checkbox(&mut self.f64, "f64");
@@ -112,194 +156,33 @@ impl DataViewer {
         let mut float_buffer = dtoa::Buffer::new();
         let delimiter = ", ";
 
-        display_type(
+        create_display_type!(ui, &selected_bytes, endianness, delimiter, i8, self.i8, 1);
+        create_display_type!(ui, &selected_bytes, endianness, delimiter, u8, self.u8, 1);
+        create_display_type!(ui, &selected_bytes, endianness, delimiter, i16, self.i16, 2);
+        create_display_type!(ui, &selected_bytes, endianness, delimiter, u16, self.u16, 2);
+        create_display_type!(ui, &selected_bytes, endianness, delimiter, i32, self.i32, 4);
+        create_display_type!(ui, &selected_bytes, endianness, delimiter, u32, self.u32, 4);
+        create_display_type!(ui, &selected_bytes, endianness, delimiter, i64, self.i64, 8);
+        create_display_type!(ui, &selected_bytes, endianness, delimiter, u64, self.u64, 8);
+        create_display_type!(
             ui,
             &selected_bytes,
-            self.s8,
-            "s8",
-            1,
-            |chunk| {
-                format!(
-                    "{:}",
-                    match endianness {
-                        Endianness::Little =>
-                            i8::from_le_bytes(chunk.try_into().unwrap_or_default()),
-                        Endianness::Big => i8::from_be_bytes(chunk.try_into().unwrap_or_default()),
-                    }
-                )
-            },
+            endianness,
             delimiter,
-        );
-
-        display_type(
-            ui,
-            &selected_bytes,
-            self.u8,
-            "u8",
-            1,
-            |chunk| {
-                format!(
-                    "{:}",
-                    match endianness {
-                        Endianness::Little =>
-                            u8::from_le_bytes(chunk.try_into().unwrap_or_default()),
-                        Endianness::Big => u8::from_be_bytes(chunk.try_into().unwrap_or_default()),
-                    }
-                )
-            },
-            delimiter,
-        );
-
-        display_type(
-            ui,
-            &selected_bytes,
-            self.s16,
-            "s16",
-            2,
-            |chunk| {
-                format!(
-                    "{:}",
-                    match endianness {
-                        Endianness::Little =>
-                            i16::from_le_bytes(chunk.try_into().unwrap_or_default()),
-                        Endianness::Big => i16::from_be_bytes(chunk.try_into().unwrap_or_default()),
-                    }
-                )
-            },
-            delimiter,
-        );
-
-        display_type(
-            ui,
-            &selected_bytes,
-            self.u16,
-            "u16",
-            2,
-            |chunk| {
-                format!(
-                    "{:}",
-                    match endianness {
-                        Endianness::Little =>
-                            u16::from_le_bytes(chunk.try_into().unwrap_or_default()),
-                        Endianness::Big => u16::from_be_bytes(chunk.try_into().unwrap_or_default()),
-                    }
-                )
-            },
-            delimiter,
-        );
-
-        display_type(
-            ui,
-            &selected_bytes,
-            self.s32,
-            "s32",
-            4,
-            |chunk| {
-                format!(
-                    "{:}",
-                    match endianness {
-                        Endianness::Little =>
-                            i32::from_le_bytes(chunk.try_into().unwrap_or_default()),
-                        Endianness::Big => i32::from_be_bytes(chunk.try_into().unwrap_or_default()),
-                    }
-                )
-            },
-            delimiter,
-        );
-
-        display_type(
-            ui,
-            &selected_bytes,
-            self.u32,
-            "u32",
-            4,
-            |chunk| {
-                format!(
-                    "{:}",
-                    match endianness {
-                        Endianness::Little =>
-                            u32::from_le_bytes(chunk.try_into().unwrap_or_default()),
-                        Endianness::Big => u32::from_be_bytes(chunk.try_into().unwrap_or_default()),
-                    }
-                )
-            },
-            delimiter,
-        );
-
-        display_type(
-            ui,
-            &selected_bytes,
+            f32,
             self.f32,
-            "f32",
             4,
-            |chunk| {
-                float_buffer
-                    .format(match endianness {
-                        Endianness::Little => {
-                            f32::from_le_bytes(chunk.try_into().unwrap_or_default())
-                        }
-                        Endianness::Big => f32::from_be_bytes(chunk.try_into().unwrap_or_default()),
-                    })
-                    .to_string()
-            },
-            delimiter,
+            float_buffer
         );
-
-        display_type(
+        create_display_type!(
             ui,
             &selected_bytes,
-            self.s64,
-            "s64",
-            8,
-            |chunk| {
-                format!(
-                    "{:}",
-                    match endianness {
-                        Endianness::Little =>
-                            i64::from_le_bytes(chunk.try_into().unwrap_or_default()),
-                        Endianness::Big => i64::from_be_bytes(chunk.try_into().unwrap_or_default()),
-                    }
-                )
-            },
+            endianness,
             delimiter,
-        );
-
-        display_type(
-            ui,
-            &selected_bytes,
-            self.u64,
-            "u64",
-            8,
-            |chunk| {
-                format!(
-                    "{:}",
-                    match endianness {
-                        Endianness::Little =>
-                            u64::from_le_bytes(chunk.try_into().unwrap_or_default()),
-                        Endianness::Big => u64::from_be_bytes(chunk.try_into().unwrap_or_default()),
-                    }
-                )
-            },
-            delimiter,
-        );
-
-        display_type(
-            ui,
-            &selected_bytes,
+            f64,
             self.f64,
-            "f64",
             8,
-            |chunk| {
-                float_buffer
-                    .format(match endianness {
-                        Endianness::Little => {
-                            f64::from_le_bytes(chunk.try_into().unwrap_or_default())
-                        }
-                        Endianness::Big => f64::from_be_bytes(chunk.try_into().unwrap_or_default()),
-                    })
-                    .to_string()
-            },
-            delimiter,
+            float_buffer
         );
     }
 }
