@@ -1,6 +1,5 @@
-#[derive(
-    serde::Deserialize, serde::Serialize, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy,
-)]
+use serde::{Deserialize, Serialize};
+#[derive(Deserialize, Serialize, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub enum ByteGrouping {
     One,
     Two,
@@ -38,7 +37,7 @@ impl From<ByteGrouping> for usize {
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Default, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Deserialize, Serialize, Default, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Settings {
     pub byte_grouping: ByteGrouping,
 }

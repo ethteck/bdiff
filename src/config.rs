@@ -1,23 +1,35 @@
 use std::{
     fs::File,
+    io::Write,
     path::{Path, PathBuf},
 };
 
 use anyhow::{Context, Error};
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, serde::Deserialize)]
+use crate::settings::Settings;
+
+#[derive(Clone, Deserialize, Serialize)]
 pub struct FileConfig {
     pub path: PathBuf,
     pub map: Option<PathBuf>,
 }
 
-#[derive(Clone, serde::Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Config {
     pub files: Vec<FileConfig>,
+    #[serde(default)]
+    pub settings: Settings,
 }
 
 pub fn read_json_config(config_path: &Path) -> Result<Config, Error> {
     let mut reader = File::open(config_path)
         .with_context(|| format!("Failed to open config file at {}", config_path.display()))?;
     Ok(serde_json::from_reader(&mut reader)?)
+}
+
+pub fn write_json_config(config_path: &Path, config: &Config) -> Result<(), Error> {
+    let mut writer = File::open(config_path)
+        .with_context(|| format!("Failed to open config file at {}", config_path.display()))?;
+    Ok(writer.write_all(serde_json::to_string_pretty(config)?.as_bytes())?)
 }

@@ -86,6 +86,7 @@ impl BdiffApp {
                         }
                     }
                 }
+                ret.settings = config.settings;
             }
         }
 
