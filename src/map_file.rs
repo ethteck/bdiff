@@ -63,7 +63,7 @@ impl MapFile {
     pub fn get_entry(&self, start: usize, end: usize) -> Option<&MapFileEntry> {
         let entries: Vec<_> = self.data.values(start..end).collect();
 
-        match entries.get(0) {
+        match entries.first() {
             Some(entry) => {
                 if entry.symbol_vrom > start {
                     return None;
