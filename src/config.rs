@@ -28,6 +28,7 @@ pub fn read_json_config(config_path: &Path) -> Result<Config, Error> {
     Ok(serde_json::from_reader(&mut reader)?)
 }
 
+#[allow(dead_code)]
 pub fn write_json_config(config_path: &Path, config: &Config) -> Result<(), Error> {
     let mut writer = File::open(config_path)
         .with_context(|| format!("Failed to open config file at {}", config_path.display()))?;
