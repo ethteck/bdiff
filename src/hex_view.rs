@@ -11,7 +11,7 @@ use crate::{
     data_viewer::DataViewer,
     diff_state::DiffState,
     map_tool::MapTool,
-    settings::Settings,
+    settings::{Settings, ThemeSettings},
     string_viewer::StringViewer,
     widget::spacer::Spacer,
 };
@@ -195,6 +195,7 @@ impl HexView {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn show_hex_grid(
         &mut self,
         diff_state: &DiffState,
@@ -204,6 +205,7 @@ impl HexView {
         can_selection_change: bool,
         font_size: f32,
         byte_grouping: usize,
+        theme_settings: ThemeSettings,
     ) {
         let grid_rect = ui
             .group(|ui| {
@@ -281,24 +283,25 @@ impl HexView {
                                     egui::RichText::new(byte_text)
                                         .monospace()
                                         .size(font_size)
-                                        .color(if diff_state.enabled {
-                                            if diff_state.is_diff_at(row_current_pos) {
-                                                Color32::RED
+                                        .color(
+                                            if diff_state.enabled
+                                                && diff_state.is_diff_at(row_current_pos)
+                                            {
+                                                Color32::from(theme_settings.diff_color.clone())
                                             } else {
                                                 match byte {
-                                                    Some(0) => Color32::DARK_GRAY,
-                                                    _ => Color32::LIGHT_GRAY,
+                                                    Some(0) => Color32::from(
+                                                        theme_settings.hex_null_color.clone(),
+                                                    ),
+                                                    _ => Color32::from(
+                                                        theme_settings.other_hex_color.clone(),
+                                                    ),
                                                 }
-                                            }
-                                        } else {
-                                            match byte {
-                                                Some(0) => Color32::DARK_GRAY,
-                                                _ => Color32::LIGHT_GRAY,
-                                            }
-                                        })
+                                            },
+                                        )
                                         .background_color({
                                             if self.selection.contains(row_current_pos) {
-                                                Color32::DARK_GREEN
+                                                theme_settings.selection_color.clone().into()
                                             } else {
                                                 Color32::TRANSPARENT
                                             }
@@ -351,13 +354,19 @@ impl HexView {
                                         .monospace()
                                         .size(font_size)
                                         .color(match byte {
-                                            Some(0) => Color32::DARK_GRAY,
-                                            Some(32..=126) => Color32::LIGHT_GRAY,
-                                            _ => Color32::GRAY,
+                                            Some(0) => Color32::from(
+                                                theme_settings.ascii_null_color.clone(),
+                                            ),
+                                            Some(32..=126) => {
+                                                Color32::from(theme_settings.ascii_color.clone())
+                                            }
+                                            _ => Color32::from(
+                                                theme_settings.other_ascii_color.clone(),
+                                            ),
                                         })
                                         .background_color({
                                             if self.selection.contains(row_current_pos) {
-                                                Color32::DARK_GREEN
+                                                theme_settings.selection_color.clone().into()
                                             } else {
                                                 Color32::TRANSPARENT
                                             }
@@ -529,6 +538,7 @@ impl HexView {
                                 can_selection_change,
                                 font_size,
                                 settings.byte_grouping.into(),
+                                settings.theme_settings.clone(),
                             );
 
                             if self.show_selection_info {

@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Error;
 use eframe::{
-    egui::{self, Checkbox},
+    egui::{self, Checkbox, Style},
     epaint::{Rounding, Shadow},
 };
 use egui_modal::Modal;
@@ -231,25 +231,86 @@ impl BdiffApp {
     }
 
     fn show_settings(&mut self, ctx: &egui::Context) {
-        egui::Window::new("Settings").show(ctx, |ui| {
-            egui::ComboBox::from_label("Byte grouping")
-                .selected_text(self.settings.byte_grouping.to_string())
-                .show_ui(ui, |ui| {
-                    let mut add_value = |value: ByteGrouping| {
-                        ui.selectable_value(
-                            &mut self.settings.byte_grouping,
-                            value,
-                            value.to_string(),
-                        );
-                    };
-                    add_value(ByteGrouping::One);
-                    add_value(ByteGrouping::Two);
-                    add_value(ByteGrouping::Four);
-                    add_value(ByteGrouping::Eight);
-                    add_value(ByteGrouping::Sixteen);
-                    add_value(ByteGrouping::ThirtyTwo);
+        egui::Window::new("Settings")
+            .default_open(true)
+            .show(ctx, |ui| {
+                // Byte Grouping
+                ui.horizontal(|ui| {
+                    ui.label("Byte grouping");
+                    egui::ComboBox::from_id_source("byte_grouping_dropdown")
+                        .selected_text(self.settings.byte_grouping.to_string())
+                        .show_ui(ui, |ui| {
+                            for value in ByteGrouping::get_all_options() {
+                                ui.selectable_value(
+                                    &mut self.settings.byte_grouping,
+                                    value,
+                                    value.to_string(),
+                                );
+                            }
+                        });
                 });
-        });
+
+                egui::CollapsingHeader::new("Theme settings").show(ui, |ui| {
+                    egui::Frame::group(&Style::default()).show(ui, |ui| {
+                        egui::Grid::new("hex_view_colors").show(ui, |ui| {
+                            ui.heading("HexView colors");
+                            ui.end_row();
+
+                            ui.label("Selection color");
+                            ui.color_edit_button_srgba_premultiplied(
+                                self.settings.theme_settings.selection_color.as_bytes_mut(),
+                            );
+                            ui.end_row();
+
+                            ui.label("Diff color");
+                            ui.color_edit_button_srgba_premultiplied(
+                                self.settings.theme_settings.diff_color.as_bytes_mut(),
+                            );
+                            ui.end_row();
+
+                            ui.label("Null color");
+                            ui.color_edit_button_srgba_premultiplied(
+                                self.settings.theme_settings.hex_null_color.as_bytes_mut(),
+                            );
+                            ui.end_row();
+
+                            ui.label("Other color");
+                            ui.color_edit_button_srgba_premultiplied(
+                                self.settings.theme_settings.other_hex_color.as_bytes_mut(),
+                            );
+                            ui.end_row();
+                        });
+                    });
+
+                    egui::Frame::group(&Style::default()).show(ui, |ui| {
+                        egui::Grid::new("ascii_view_colors").show(ui, |ui| {
+                            ui.heading("AsciiView colors");
+                            ui.end_row();
+
+                            ui.label("Null color");
+                            ui.color_edit_button_srgba_premultiplied(
+                                self.settings.theme_settings.ascii_null_color.as_bytes_mut(),
+                            );
+                            ui.end_row();
+
+                            ui.label("Ascii color");
+                            ui.color_edit_button_srgba_premultiplied(
+                                self.settings.theme_settings.ascii_color.as_bytes_mut(),
+                            );
+                            ui.end_row();
+
+                            ui.label("Other color");
+                            ui.color_edit_button_srgba_premultiplied(
+                                self.settings
+                                    .theme_settings
+                                    .other_ascii_color
+                                    .as_bytes_mut(),
+                            );
+                            ui.end_row();
+                        });
+                    });
+                })
+            });
     }
 }
 
