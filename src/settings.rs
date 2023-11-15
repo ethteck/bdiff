@@ -84,6 +84,10 @@ impl From<Color> for Color32 {
 pub struct ThemeSettings {
     pub selection_color: Color,
 
+    // Offset colors
+    pub offset_text_color: Color,
+    pub offset_leading_zero_color: Color,
+
     // Hex View colors
     pub diff_color: Color,
     pub hex_null_color: Color,
@@ -98,6 +102,9 @@ pub struct ThemeSettings {
 impl Default for ThemeSettings {
     fn default() -> Self {
         Self {
+            offset_text_color: Color32::GRAY.into(),
+            offset_leading_zero_color: Color32::DARK_GRAY.into(),
+
             selection_color: Color32::DARK_GREEN.into(),
             diff_color: Color32::RED.into(),
             hex_null_color: Color32::DARK_GRAY.into(),

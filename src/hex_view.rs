@@ -246,9 +246,15 @@ impl HexView {
                                         .size(font_size)
                                         .color({
                                             if offset_leading_zeros {
-                                                Color32::DARK_GRAY
+                                                Color32::from(
+                                                    theme_settings
+                                                        .offset_leading_zero_color
+                                                        .clone(),
+                                                )
                                             } else {
-                                                Color32::GRAY
+                                                Color32::from(
+                                                    theme_settings.offset_text_color.clone(),
+                                                )
                                             }
                                         }),
                                 );

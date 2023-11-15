@@ -252,8 +252,33 @@ impl BdiffApp {
 
                 egui::CollapsingHeader::new("Theme settings").show(ui, |ui| {
                     egui::Frame::group(&Style::default()).show(ui, |ui| {
+                        egui::Grid::new("offset_colors").show(ui, |ui| {
+                            ui.heading("Offset colors");
+                            ui.end_row();
+
+                            ui.label("Offset text color");
+                            ui.color_edit_button_srgba_premultiplied(
+                                self.settings
+                                    .theme_settings
+                                    .offset_text_color
+                                    .as_bytes_mut(),
+                            );
+                            ui.end_row();
+
+                            ui.label("Leading zero color");
+                            ui.color_edit_button_srgba_premultiplied(
+                                self.settings
+                                    .theme_settings
+                                    .offset_leading_zero_color
+                                    .as_bytes_mut(),
+                            );
+                            ui.end_row();
+                        });
+                    });
+
+                    egui::Frame::group(&Style::default()).show(ui, |ui| {
                         egui::Grid::new("hex_view_colors").show(ui, |ui| {
-                            ui.heading("HexView colors");
+                            ui.heading("Hex area colors");
                             ui.end_row();
 
                             ui.label("Selection color");
@@ -284,7 +309,7 @@ impl BdiffApp {
 
                     egui::Frame::group(&Style::default()).show(ui, |ui| {
                         egui::Grid::new("ascii_view_colors").show(ui, |ui| {
-                            ui.heading("AsciiView colors");
+                            ui.heading("Ascii area colors");
                             ui.end_row();
 
                             ui.label("Null color");
