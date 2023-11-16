@@ -12,7 +12,7 @@ use egui_modal::Modal;
 
 use crate::{
     bin_file::BinFile,
-    config::read_json_config,
+    config::{read_json_config, write_json_config, Config, FileConfig},
     diff_state::DiffState,
     hex_view::{HexView, HexViewSelection, HexViewSelectionSide, HexViewSelectionState},
     settings::{read_json_settings, write_json_settings, ByteGrouping, Settings},
@@ -22,6 +22,11 @@ use crate::{
 struct GotoModal {
     value: String,
     status: String,
+}
+
+#[derive(Default)]
+struct OverwriteModal {
+    open: bool,
 }
 
 struct Options {
@@ -42,6 +47,7 @@ pub struct BdiffApp {
     hex_views: Vec<HexView>,
     diff_state: DiffState,
     goto_modal: GotoModal,
+    overwrite_modal: OverwriteModal,
     scroll_overflow: f32,
     options: Options,
     global_selection: HexViewSelection, // the selection that all hex views will mirror
@@ -49,6 +55,8 @@ pub struct BdiffApp {
     last_selected_hv: Option<usize>,
     settings_open: bool,
     settings: Settings,
+    config: Config,
+    started_with_arguments: bool,
 }
 
 impl BdiffApp {
@@ -66,46 +74,61 @@ impl BdiffApp {
             sett
         };
 
+        let started_with_arguments = !paths.is_empty();
+
         let mut ret = Self {
             next_hv_id: 0,
             hex_views,
             settings,
+            started_with_arguments,
             ..Default::default()
         };
 
-        if !paths.is_empty() {
-            for path in paths {
-                let _ = ret.open_file(path);
+        log::info!("Loading project config from file");
+        let config_path = Path::new("bdiff.json");
+
+        let config = if started_with_arguments {
+            let file_configs = paths
+                .into_iter()
+                .map(|a| a.into())
+                .collect::<Vec<FileConfig>>();
+
+            Config {
+                files: file_configs,
+                changed: true,
             }
+        } else if config_path.exists() {
+            read_json_config(config_path).unwrap()
         } else {
-            log::info!("Loading project config from file");
-            let config_path = Path::new("bdiff.json");
+            let conf = Config::default();
+            write_json_config(config_path, &conf).expect("Failed to write empty project config");
+            conf
+        };
 
-            if config_path.exists() {
-                let config = read_json_config(config_path).unwrap();
-
-                for file in config.files {
-                    match ret.open_file(file.path) {
-                        Ok(hv) => {
-                            if let Some(map) = file.map {
-                                hv.mt.load_file(&map);
-                            }
-                        }
-                        Err(e) => {
-                            log::error!("Failed to open file: {}", e);
-                        }
+        for file in config.files.iter() {
+            match ret.open_file(&file.path) {
+                Ok(hv) => {
+                    if let Some(map) = file.map.as_ref() {
+                        hv.mt.load_file(map);
                     }
+                }
+                Err(e) => {
+                    log::error!("Failed to open file: {}", e);
                 }
             }
         }
+
+        ret.config = config;
 
         ret.diff_state.recalculate(&ret.hex_views);
 
         ret
     }
 
-    pub fn open_file(&mut self, path: PathBuf) -> Result<&mut HexView, Error> {
-        let file = BinFile::from_path(path.clone())?;
+    pub fn open_file(&mut self, path: &Path) -> Result<&mut HexView, Error> {
+        let file = BinFile::from_path(path)?;
+        self.config.files.push(path.into());
+        self.config.changed = true;
 
         let hv = HexView::new(file, self.next_hv_id);
         self.hex_views.push(hv);
@@ -457,6 +480,18 @@ impl eframe::App for BdiffApp {
             self.show_goto_modal(&goto_modal, ui, ctx);
         });
 
+        let overwrite_modal: Modal = Modal::new(ctx, "overwrite_modal");
+
+        if self.overwrite_modal.open {
+            self.overwrite_modal(&overwrite_modal);
+            overwrite_modal.open();
+        }
+
+        // Standard HexView input
+        if !overwrite_modal.is_open() {
+            self.handle_hex_view_input(ctx);
+        }
+
         if ctx.input(|i| i.key_pressed(egui::Key::G)) {
             if goto_modal.is_open() {
                 goto_modal.close();
@@ -469,7 +504,7 @@ impl eframe::App for BdiffApp {
         // Open dropped files
         if ctx.input(|i| !i.raw.dropped_files.is_empty()) {
             for file in ctx.input(|i| i.raw.dropped_files.clone()) {
-                let _ = self.open_file(file.path.unwrap());
+                let _ = self.open_file(&file.path.unwrap());
                 self.diff_state.recalculate(&self.hex_views);
             }
         }
@@ -509,10 +544,22 @@ impl eframe::App for BdiffApp {
                 ui.menu_button("File", |ui| {
                     if ui.button("Open").clicked() {
                         if let Some(path) = rfd::FileDialog::new().pick_file() {
-                            let _ = self.open_file(path);
+                            let _ = self.open_file(&path);
                             self.diff_state.recalculate(&self.hex_views);
                         }
 
+                        ui.close_menu();
+                    }
+                    if ui.button("Save Workspace").clicked() {
+                        if self.config.changed {
+                            if self.started_with_arguments {
+                                self.overwrite_modal.open = true;
+                            } else {
+                                write_json_config("bdiff.json", &self.config)
+                                    .expect("Failed to write config");
+                                self.config.changed = false;
+                            };
+                        }
                         ui.close_menu();
                     }
                     if ui.button("Quit").clicked() {
@@ -562,6 +609,7 @@ impl eframe::App for BdiffApp {
                     None => true,
                 };
                 hv.show(
+                    &mut self.config,
                     &self.settings,
                     &self.diff_state,
                     ctx,
@@ -658,6 +706,26 @@ impl eframe::App for BdiffApp {
 }
 
 impl BdiffApp {
+    fn overwrite_modal(&mut self, modal: &Modal) {
+        modal.show(|ui| {
+            modal.title(ui, "Overwrite previous config");
+            ui.label("By saving, you are going to overwrite previous configuration.");
+            ui.label("Are you sure you want to proceed?");
+
+            modal.buttons(ui, |ui| {
+                if ui.button("Overwrite").clicked() {
+                    write_json_config("bdiff.json", &self.config).unwrap();
+                    self.config.changed = false;
+                    self.overwrite_modal.open = false;
+                }
+                if ui.button("Cancel").clicked() {
+                    modal.close();
+                    self.overwrite_modal.open = false;
+                }
+            });
+        });
+    }
+
     fn show_goto_modal(&mut self, goto_modal: &Modal, ui: &mut egui::Ui, ctx: &egui::Context) {
         goto_modal.title(ui, "Go to address");
         ui.label("Enter a hex address to go to");

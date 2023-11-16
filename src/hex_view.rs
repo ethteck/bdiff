@@ -8,6 +8,7 @@ use crate::{
     app::CursorState,
     bin_file::BinFile,
     bin_file::{read_file_bytes, Endianness},
+    config::Config,
     data_viewer::DataViewer,
     diff_state::DiffState,
     map_tool::MapTool,
@@ -457,6 +458,7 @@ impl HexView {
 
     pub fn show(
         &mut self,
+        config: &mut Config,
         settings: &Settings,
         diff_state: &DiffState,
         ctx: &egui::Context,
@@ -528,6 +530,14 @@ impl HexView {
 
                         if ui.button("X").on_hover_text("Close").clicked() {
                             self.closed = true;
+
+                            // Remove file from the config if it's closed.
+                            if let Some(pos) =
+                                config.files.iter().position(|a| a.path == self.file.path)
+                            {
+                                config.files.remove(pos);
+                                config.changed = true;
+                            }
                         }
                     },
                 );

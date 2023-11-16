@@ -1,7 +1,7 @@
 use std::{
     fs::File,
     io::{BufReader, Read},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{atomic::AtomicBool, Arc},
 };
 
@@ -25,8 +25,8 @@ pub struct BinFile {
     pub modified: Arc<AtomicBool>,
 }
 
-pub fn read_file_bytes(path: PathBuf) -> Result<Vec<u8>, Error> {
-    let file = match File::open(path.clone()) {
+pub fn read_file_bytes<P: Into<PathBuf>>(path: P) -> Result<Vec<u8>, Error> {
+    let file = match File::open(path.into()) {
         Ok(file) => file,
         Err(_error) => {
             return Err(Error::msg("Failed to open file"));
@@ -44,8 +44,9 @@ pub fn read_file_bytes(path: PathBuf) -> Result<Vec<u8>, Error> {
 }
 
 impl BinFile {
-    pub fn from_path(path: PathBuf) -> Result<Self, Error> {
-        let data = match read_file_bytes(path.clone()) {
+    pub fn from_path<P: Into<PathBuf>>(path: P) -> Result<Self, Error> {
+        let path: PathBuf = path.into();
+        let data = match read_file_bytes(&path) {
             Ok(data) => data,
             Err(e) => return Err(e),
         };
