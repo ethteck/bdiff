@@ -123,13 +123,13 @@ impl DataViewer {
                         ));
 
                         ui.menu_button("...", |ui| {
-                            ui.checkbox(&mut self.i8, "s8");
+                            ui.checkbox(&mut self.i8, "i8");
                             ui.checkbox(&mut self.u8, "u8");
-                            ui.checkbox(&mut self.i16, "s16");
+                            ui.checkbox(&mut self.i16, "i16");
                             ui.checkbox(&mut self.u16, "u16");
-                            ui.checkbox(&mut self.i32, "s32");
+                            ui.checkbox(&mut self.i32, "i32");
                             ui.checkbox(&mut self.u32, "u32");
-                            ui.checkbox(&mut self.i64, "s64");
+                            ui.checkbox(&mut self.i64, "i64");
                             ui.checkbox(&mut self.u64, "u64");
                             ui.checkbox(&mut self.f32, "f32");
                             ui.checkbox(&mut self.f64, "f64");
