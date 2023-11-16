@@ -15,7 +15,7 @@ use crate::{
     config::read_json_config,
     diff_state::DiffState,
     hex_view::{HexView, HexViewSelection, HexViewSelectionSide, HexViewSelectionState},
-    settings::{ByteGrouping, Settings},
+    settings::{read_json_settings, write_json_settings, ByteGrouping, Settings},
 };
 
 #[derive(Default)]
@@ -57,9 +57,19 @@ impl BdiffApp {
 
         let hex_views = Vec::new();
 
+        let settings = if let Ok(settings) = read_json_settings() {
+            settings
+        } else {
+            let sett = Settings::default();
+            write_json_settings(&sett)
+                .expect("Failed to write empty settings to the settings file!");
+            sett
+        };
+
         let mut ret = Self {
             next_hv_id: 0,
             hex_views,
+            settings,
             ..Default::default()
         };
 
@@ -86,7 +96,6 @@ impl BdiffApp {
                         }
                     }
                 }
-                ret.settings = config.settings;
             }
         }
 
@@ -234,6 +243,11 @@ impl BdiffApp {
         egui::Window::new("Settings")
             .default_open(true)
             .show(ctx, |ui| {
+                if ui.button("Restore defaults").clicked() {
+                    self.settings = Settings::default();
+                    write_json_settings(&self.settings).expect("Failed to save settings!");
+                }
+
                 // Byte Grouping
                 ui.horizontal(|ui| {
                     ui.label("Byte grouping");
@@ -241,11 +255,18 @@ impl BdiffApp {
                         .selected_text(self.settings.byte_grouping.to_string())
                         .show_ui(ui, |ui| {
                             for value in ByteGrouping::get_all_options() {
-                                ui.selectable_value(
-                                    &mut self.settings.byte_grouping,
-                                    value,
-                                    value.to_string(),
-                                );
+                                if ui
+                                    .selectable_value(
+                                        &mut self.settings.byte_grouping,
+                                        value,
+                                        value.to_string(),
+                                    )
+                                    .clicked()
+                                {
+                                    // A setting has been changed, save changes
+                                    write_json_settings(&self.settings)
+                                        .expect("Failed to save settings!");
+                                }
                             }
                         });
                 });
@@ -333,6 +354,15 @@ impl BdiffApp {
                             );
                             ui.end_row();
                         });
+                    });
+
+                    ui.horizontal(|ui| {
+                        if ui.button("Reload").clicked() {
+                            self.settings = read_json_settings().expect("Failed to read settings!");
+                        }
+                        if ui.button("Save").clicked() {
+                            write_json_settings(&self.settings).expect("Failed to save settings!");
+                        }
                     });
                 })
             });

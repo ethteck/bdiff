@@ -1,3 +1,10 @@
+use std::{
+    fs::{File, OpenOptions},
+    io::Write,
+    path::PathBuf,
+};
+
+use anyhow::{Context, Error};
 use eframe::epaint::Color32;
 use serde::{Deserialize, Serialize};
 
@@ -115,4 +122,34 @@ impl Default for ThemeSettings {
             other_ascii_color: Color32::GRAY.into(),
         }
     }
+}
+
+pub fn get_settings_path() -> PathBuf {
+    let mut path =
+        dirs::config_local_dir().expect("Failed to get local configuration dir, report a bug!");
+    path.push("bdiff");
+    if !path.exists() {
+        std::fs::create_dir_all(&path).expect("Failed to create a config folder!");
+    }
+    path.push("settings.json");
+    path
+}
+
+pub fn read_json_settings() -> Result<Settings, Error> {
+    let settings_path = get_settings_path();
+    let mut reader = File::open(&settings_path)
+        .with_context(|| format!("Failed to open config file at {}", settings_path.display()))?;
+    Ok(serde_json::from_reader(&mut reader)?)
+}
+
+pub fn write_json_settings(settings: &Settings) -> Result<(), Error> {
+    let settings_path = get_settings_path();
+    let mut oo = OpenOptions::new();
+    let mut writer = oo
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&settings_path)
+        .with_context(|| format!("Failed to open config file at {}", settings_path.display()))?;
+    Ok(writer.write_all(serde_json::to_string_pretty(settings)?.as_bytes())?)
 }

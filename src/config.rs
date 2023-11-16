@@ -18,8 +18,6 @@ pub struct FileConfig {
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Config {
     pub files: Vec<FileConfig>,
-    #[serde(default)]
-    pub settings: Settings,
 }
 
 pub fn read_json_config(config_path: &Path) -> Result<Config, Error> {
