@@ -468,11 +468,6 @@ impl eframe::App for BdiffApp {
 
         let goto_modal: Modal = Modal::new(ctx, "goto_modal");
 
-        // Standard HexView input
-        if !goto_modal.is_open() {
-            self.handle_hex_view_input(ctx);
-        }
-
         // Goto modal
         goto_modal.show(|ui| {
             self.show_goto_modal(&goto_modal, ui, ctx);
@@ -486,7 +481,7 @@ impl eframe::App for BdiffApp {
         }
 
         // Standard HexView input
-        if !overwrite_modal.is_open() {
+        if !(overwrite_modal.is_open() || goto_modal.is_open()) {
             self.handle_hex_view_input(ctx);
         }
 
