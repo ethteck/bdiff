@@ -702,7 +702,10 @@ impl BdiffApp {
     fn overwrite_modal(&mut self, modal: &Modal) {
         modal.show(|ui| {
             modal.title(ui, "Overwrite previous config");
-            ui.label("By saving, you are going to overwrite previous configuration.");
+            ui.label(&format!(
+                "By saving, you are going to overwrite existing configuration file at \"{}\".",
+                "./bdiff.json"
+            ));
             ui.label("Are you sure you want to proceed?");
 
             modal.buttons(ui, |ui| {
