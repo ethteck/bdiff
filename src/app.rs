@@ -100,9 +100,7 @@ impl BdiffApp {
         } else if config_path.exists() {
             read_json_config(config_path).unwrap()
         } else {
-            let conf = Config::default();
-            write_json_config(config_path, &conf).expect("Failed to write empty project config");
-            conf
+            Config::default()
         };
 
         for file in config.files.iter() {
