@@ -4,13 +4,13 @@ use crate::bin_file::Endianness;
 
 pub struct DataViewer {
     pub show: bool,
-    pub i8: bool,
+    pub s8: bool,
     pub u8: bool,
-    pub i16: bool,
+    pub s16: bool,
     pub u16: bool,
-    pub i32: bool,
+    pub s32: bool,
     pub u32: bool,
-    pub i64: bool,
+    pub s64: bool,
     pub u64: bool,
     pub f32: bool,
     pub f64: bool,
@@ -20,13 +20,13 @@ impl Default for DataViewer {
     fn default() -> DataViewer {
         DataViewer {
             show: false,
-            i8: true,
+            s8: true,
             u8: true,
-            i16: true,
+            s16: true,
             u16: true,
-            i32: true,
+            s32: true,
             u32: true,
-            i64: false,
+            s64: false,
             u64: false,
             f32: true,
             f64: true,
@@ -58,12 +58,12 @@ fn display_type(
 }
 
 macro_rules! create_display_type {
-    ($ui:expr, $selected_bytes:expr, $endianness:expr, $delimiter:expr, $represented_type:ty, $value:expr, $size:expr) => {
+    ($ui:expr, $selected_bytes:expr, $endianness:expr, $delimiter:expr, $represented_type:ty, $type_name:literal, $value:expr, $size:expr) => {
         display_type(
             $ui,
             $selected_bytes,
             $value,
-            stringify!($represented_type),
+            $type_name,
             $size,
             |chunk| {
                 format!(
@@ -79,12 +79,12 @@ macro_rules! create_display_type {
             $delimiter,
         );
     };
-    ($ui:expr, $selected_bytes:expr, $endianness:expr, $delimiter:expr, $represented_type:ty, $value:expr, $size:expr, $float_buffer:expr) => {
+    ($ui:expr, $selected_bytes:expr, $endianness:expr, $delimiter:expr, $represented_type:ty, $type_name:literal, $value:expr, $size:expr, $float_buffer:expr) => {
         display_type(
             $ui,
             $selected_bytes,
             $value,
-            stringify!($represented_type),
+            $type_name,
             $size,
             |chunk| {
                 $float_buffer
@@ -123,13 +123,13 @@ impl DataViewer {
                         ));
 
                         ui.menu_button("...", |ui| {
-                            ui.checkbox(&mut self.i8, "i8");
+                            ui.checkbox(&mut self.s8, "s8");
                             ui.checkbox(&mut self.u8, "u8");
-                            ui.checkbox(&mut self.i16, "i16");
+                            ui.checkbox(&mut self.s16, "s16");
                             ui.checkbox(&mut self.u16, "u16");
-                            ui.checkbox(&mut self.i32, "i32");
+                            ui.checkbox(&mut self.s32, "s32");
                             ui.checkbox(&mut self.u32, "u32");
-                            ui.checkbox(&mut self.i64, "i64");
+                            ui.checkbox(&mut self.s64, "s64");
                             ui.checkbox(&mut self.u64, "u64");
                             ui.checkbox(&mut self.f32, "f32");
                             ui.checkbox(&mut self.f64, "f64");
@@ -156,20 +156,93 @@ impl DataViewer {
         let mut float_buffer = dtoa::Buffer::new();
         let delimiter = ", ";
 
-        create_display_type!(ui, &selected_bytes, endianness, delimiter, i8, self.i8, 1);
-        create_display_type!(ui, &selected_bytes, endianness, delimiter, u8, self.u8, 1);
-        create_display_type!(ui, &selected_bytes, endianness, delimiter, i16, self.i16, 2);
-        create_display_type!(ui, &selected_bytes, endianness, delimiter, u16, self.u16, 2);
-        create_display_type!(ui, &selected_bytes, endianness, delimiter, i32, self.i32, 4);
-        create_display_type!(ui, &selected_bytes, endianness, delimiter, u32, self.u32, 4);
-        create_display_type!(ui, &selected_bytes, endianness, delimiter, i64, self.i64, 8);
-        create_display_type!(ui, &selected_bytes, endianness, delimiter, u64, self.u64, 8);
+        create_display_type!(
+            ui,
+            &selected_bytes,
+            endianness,
+            delimiter,
+            i8,
+            "s8",
+            self.s8,
+            1
+        );
+        create_display_type!(
+            ui,
+            &selected_bytes,
+            endianness,
+            delimiter,
+            u8,
+            "u8",
+            self.u8,
+            1
+        );
+        create_display_type!(
+            ui,
+            &selected_bytes,
+            endianness,
+            delimiter,
+            i16,
+            "s16",
+            self.s16,
+            2
+        );
+        create_display_type!(
+            ui,
+            &selected_bytes,
+            endianness,
+            delimiter,
+            u16,
+            "u16",
+            self.u16,
+            2
+        );
+        create_display_type!(
+            ui,
+            &selected_bytes,
+            endianness,
+            delimiter,
+            i32,
+            "s32",
+            self.s32,
+            4
+        );
+        create_display_type!(
+            ui,
+            &selected_bytes,
+            endianness,
+            delimiter,
+            u32,
+            "u32",
+            self.u32,
+            4
+        );
+        create_display_type!(
+            ui,
+            &selected_bytes,
+            endianness,
+            delimiter,
+            i64,
+            "s64",
+            self.s64,
+            8
+        );
+        create_display_type!(
+            ui,
+            &selected_bytes,
+            endianness,
+            delimiter,
+            u64,
+            "u64",
+            self.u64,
+            8
+        );
         create_display_type!(
             ui,
             &selected_bytes,
             endianness,
             delimiter,
             f32,
+            "f32",
             self.f32,
             4,
             float_buffer
@@ -180,6 +253,7 @@ impl DataViewer {
             endianness,
             delimiter,
             f64,
+            "f64",
             self.f64,
             8,
             float_buffer
