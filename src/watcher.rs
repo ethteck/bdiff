@@ -8,8 +8,8 @@ use std::{
 
 use notify::Watcher;
 
-pub fn create_watcher(
-    path: PathBuf,
+pub fn create_watcher<P: Into<PathBuf>>(
+    path: P,
     modified: Arc<AtomicBool>,
 ) -> notify::Result<notify::RecommendedWatcher> {
     let mut watcher =
@@ -22,7 +22,7 @@ pub fn create_watcher(
             Err(e) => println!("watch error: {:?}", e),
         })?;
 
-    watcher.watch(&path, notify::RecursiveMode::NonRecursive)?;
+    watcher.watch(&path.into(), notify::RecursiveMode::NonRecursive)?;
 
     Ok(watcher)
 }

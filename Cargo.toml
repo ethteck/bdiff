@@ -15,6 +15,7 @@ build = "build.rs"
 [dependencies]
 anyhow = "1.0.75"
 argh = "0.1.12"
+dirs = "5.0.1"
 dtoa = "1.0.9"
 eframe = { version = "0.23.0", features = ["persistence"] }
 egui-modal = "0.2.5"

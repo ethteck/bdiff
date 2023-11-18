@@ -8,9 +8,11 @@ use crate::{
     app::CursorState,
     bin_file::BinFile,
     bin_file::{read_file_bytes, Endianness},
+    config::Config,
     data_viewer::DataViewer,
     diff_state::DiffState,
     map_tool::MapTool,
+    settings::{Settings, ThemeSettings},
     string_viewer::StringViewer,
     widget::spacer::Spacer,
 };
@@ -194,6 +196,7 @@ impl HexView {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn show_hex_grid(
         &mut self,
         diff_state: &DiffState,
@@ -202,6 +205,8 @@ impl HexView {
         cursor_state: CursorState,
         can_selection_change: bool,
         font_size: f32,
+        byte_grouping: usize,
+        theme_settings: ThemeSettings,
     ) {
         let grid_rect = ui
             .group(|ui| {
@@ -242,9 +247,15 @@ impl HexView {
                                         .size(font_size)
                                         .color({
                                             if offset_leading_zeros {
-                                                Color32::DARK_GRAY
+                                                Color32::from(
+                                                    theme_settings
+                                                        .offset_leading_zero_color
+                                                        .clone(),
+                                                )
                                             } else {
-                                                Color32::GRAY
+                                                Color32::from(
+                                                    theme_settings.offset_text_color.clone(),
+                                                )
                                             }
                                         }),
                                 );
@@ -263,7 +274,7 @@ impl HexView {
                             // hex view
                             let mut i = 0;
                             while i < self.bytes_per_row {
-                                if i > 0 && (i % 8) == 0 {
+                                if i > 0 && (i % byte_grouping) == 0 {
                                     ui.add(Spacer::default().spacing_x(4.0));
                                 }
                                 let row_current_pos = current_pos + i;
@@ -279,24 +290,25 @@ impl HexView {
                                     egui::RichText::new(byte_text)
                                         .monospace()
                                         .size(font_size)
-                                        .color(if diff_state.enabled {
-                                            if diff_state.is_diff_at(row_current_pos) {
-                                                Color32::RED
+                                        .color(
+                                            if diff_state.enabled
+                                                && diff_state.is_diff_at(row_current_pos)
+                                            {
+                                                Color32::from(theme_settings.diff_color.clone())
                                             } else {
                                                 match byte {
-                                                    Some(0) => Color32::DARK_GRAY,
-                                                    _ => Color32::LIGHT_GRAY,
+                                                    Some(0) => Color32::from(
+                                                        theme_settings.hex_null_color.clone(),
+                                                    ),
+                                                    _ => Color32::from(
+                                                        theme_settings.other_hex_color.clone(),
+                                                    ),
                                                 }
-                                            }
-                                        } else {
-                                            match byte {
-                                                Some(0) => Color32::DARK_GRAY,
-                                                _ => Color32::LIGHT_GRAY,
-                                            }
-                                        })
+                                            },
+                                        )
                                         .background_color({
                                             if self.selection.contains(row_current_pos) {
-                                                Color32::DARK_GREEN
+                                                theme_settings.selection_color.clone().into()
                                             } else {
                                                 Color32::TRANSPARENT
                                             }
@@ -349,13 +361,19 @@ impl HexView {
                                         .monospace()
                                         .size(font_size)
                                         .color(match byte {
-                                            Some(0) => Color32::DARK_GRAY,
-                                            Some(32..=126) => Color32::LIGHT_GRAY,
-                                            _ => Color32::GRAY,
+                                            Some(0) => Color32::from(
+                                                theme_settings.ascii_null_color.clone(),
+                                            ),
+                                            Some(32..=126) => {
+                                                Color32::from(theme_settings.ascii_color.clone())
+                                            }
+                                            _ => Color32::from(
+                                                theme_settings.other_ascii_color.clone(),
+                                            ),
                                         })
                                         .background_color({
                                             if self.selection.contains(row_current_pos) {
-                                                Color32::DARK_GREEN
+                                                theme_settings.selection_color.clone().into()
                                             } else {
                                                 Color32::TRANSPARENT
                                             }
@@ -440,6 +458,8 @@ impl HexView {
 
     pub fn show(
         &mut self,
+        config: &mut Config,
+        settings: &Settings,
         diff_state: &DiffState,
         ctx: &egui::Context,
         cursor_state: CursorState,
@@ -510,6 +530,14 @@ impl HexView {
 
                         if ui.button("X").on_hover_text("Close").clicked() {
                             self.closed = true;
+
+                            // Remove file from the config if it's closed.
+                            if let Some(pos) =
+                                config.files.iter().position(|a| a.path == self.file.path)
+                            {
+                                config.files.remove(pos);
+                                config.changed = true;
+                            }
                         }
                     },
                 );
@@ -525,6 +553,8 @@ impl HexView {
                                 cursor_state,
                                 can_selection_change,
                                 font_size,
+                                settings.byte_grouping.into(),
+                                settings.theme_settings.clone(),
                             );
 
                             if self.show_selection_info {
