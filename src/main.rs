@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 use app::BdiffApp;
 use argh::FromArgs;
-use eframe::IconData;
+use eframe::{egui::ViewportBuilder, icon_data};
 
 #[derive(FromArgs)]
 /// binary differ
@@ -31,9 +31,8 @@ fn main() {
     let args: Args = argh::from_env();
 
     let native_options = eframe::NativeOptions {
-        icon_data: Some(
-            IconData::try_from_png_bytes(include_bytes!("../assets/icon.png")).unwrap(),
-        ),
+        viewport: ViewportBuilder::default()
+            .with_icon(icon_data::from_png_bytes(include_bytes!("../assets/icon.png")).unwrap()),
         ..Default::default()
     };
 

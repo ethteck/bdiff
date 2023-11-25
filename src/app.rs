@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Error;
 use eframe::{
-    egui::{self, Checkbox, Style},
+    egui::{self, Checkbox, Style, ViewportCommand},
     epaint::{Rounding, Shadow},
 };
 use egui_modal::Modal;
@@ -440,7 +440,7 @@ pub enum CursorState {
 }
 
 impl eframe::App for BdiffApp {
-    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut style: egui::Style = (*ctx.style()).clone();
         style.visuals.popup_shadow = Shadow {
             extrusion: 0.0,
@@ -556,7 +556,7 @@ impl eframe::App for BdiffApp {
                         ui.close_menu();
                     }
                     if ui.button("Quit").clicked() {
-                        frame.close();
+                        ctx.send_viewport_cmd(ViewportCommand::Close)
                     }
                 });
                 ui.menu_button("Options", |ui| {

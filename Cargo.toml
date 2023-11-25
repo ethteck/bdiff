@@ -17,9 +17,9 @@ anyhow = "1.0.75"
 argh = "0.1.12"
 dirs = "5.0.1"
 dtoa = "1.0.9"
-eframe = { version = "0.23.0", features = ["persistence"] }
-egui-modal = "0.2.5"
-egui-phosphor = "0.3.0"
+eframe = { version = "0.24.0", features = ["persistence"] }
+egui-modal = "0.3.0"
+egui-phosphor = "0.3.1"
 encoding_rs = "0.8.33"
 iset = "0.2.2"
 log = "0.4.20"
