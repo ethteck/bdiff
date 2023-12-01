@@ -1,6 +1,6 @@
 [package]
 name = "bdiff"
-version = "0.7.0"
+version = "0.8.5"
 edition = "2021"
 authors = ["Ethan Roseman <ethteck@gmail.com>"]
 license = "MIT"
@@ -17,7 +17,7 @@ anyhow = "1.0.75"
 argh = "0.1.12"
 dirs = "5.0.1"
 dtoa = "1.0.9"
-eframe = { version = "0.24.0", features = ["persistence"] }
+eframe = { version = "0.24.1", features = ["persistence"] }
 egui-modal = "0.3.0"
 egui-phosphor = "0.3.1"
 encoding_rs = "0.8.33"
