@@ -66,14 +66,18 @@ jobs:
           targets: ${{ matrix.target }}
       - name: Cargo build
         run: cargo build --release --all-features --target ${{ matrix.target }} --bin ${{ env.CARGO_BIN_NAME }}
+      - name: Package unix artifacts
+        if: matrix.platform == 'ubuntu-latest' || matrix.platform == 'macos-latest'
+        run: |
+            zip -j -r ${{ env.CARGO_TARGET_DIR }}/${{ env.CARGO_BIN_NAME }}.zip ${{ env.CARGO_TARGET_DIR }}/release/${{ env.CARGO_BIN_NAME }} || true
+            zip -j -r ${{ env.CARGO_TARGET_DIR }}/${{ env.CARGO_BIN_NAME }}.zip ${{ env.CARGO_TARGET_DIR }}/${{ matrix.target }}/release/${{ env.CARGO_BIN_NAME }} || true
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
           name: ${{ matrix.name }}
           path: |
-            ${{ env.CARGO_TARGET_DIR }}/release/${{ env.CARGO_BIN_NAME }}
+            ${{ env.CARGO_TARGET_DIR }}/${{ env.CARGO_BIN_NAME }}.zip
             ${{ env.CARGO_TARGET_DIR }}/release/${{ env.CARGO_BIN_NAME }}.exe
-            ${{ env.CARGO_TARGET_DIR }}/${{ matrix.target }}/release/${{ env.CARGO_BIN_NAME }}
             ${{ env.CARGO_TARGET_DIR }}/${{ matrix.target }}/release/${{ env.CARGO_BIN_NAME }}.exe
           if-no-files-found: error
 
