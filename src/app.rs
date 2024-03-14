@@ -234,7 +234,7 @@ impl BdiffApp {
                     }
                 }
 
-                let scroll_y = ctx.input(|i| i.scroll_delta.y);
+                let scroll_y = ctx.input(|i| i.raw_scroll_delta.y);
 
                 // Scrolling
                 if scroll_y != 0.0 {
