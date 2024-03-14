@@ -452,6 +452,8 @@ impl eframe::App for BdiffApp {
         };
         style.visuals.menu_rounding = Rounding::default();
         style.visuals.window_rounding = Rounding::default();
+        style.interaction.selectable_labels = false;
+        style.interaction.multi_widget_text_select = false;
         ctx.set_style(style);
 
         let cursor_state: CursorState = ctx.input(|i| {
@@ -655,8 +657,20 @@ impl eframe::App for BdiffApp {
             self.hex_views.retain(|hv| {
                 calc_diff = calc_diff || hv.closed;
                 let delete: bool = { hv.closed };
+
+                if let Some(id) = self.last_selected_hv {
+                    if hv.id == id {
+                        self.last_selected_hv = None;
+                    }
+                }
+
                 !delete
-            })
+            });
+
+            // If we have no hex views left, don't keep track of any selection
+            if self.hex_views.is_empty() {
+                self.global_selection.clear();
+            }
         });
 
         // File reloading
