@@ -44,7 +44,7 @@ impl DiffState {
         None
     }
 
-    pub fn recalculate(&mut self, hex_views: &Vec<HexView>) {
+    pub fn recalculate(&mut self, hex_views: &[HexView]) {
         if !self.enabled {
             self.out_of_date = true;
             return;
