@@ -181,6 +181,12 @@ impl BdiffApp {
             }
         } else {
             // Move view
+            let prev_positions: Vec<usize> = self
+                .hex_views
+                .iter()
+                .map(|hv| hv.cur_pos)
+                .collect::<Vec<usize>>();
+
             for hv in self.hex_views.iter_mut() {
                 // Keys
                 if ctx.input(|i| i.key_pressed(egui::Key::Home)) {
@@ -256,6 +262,18 @@ impl BdiffApp {
                     }
                     hv.adjust_cur_pos(-scroll_amt * lines_per_scroll * hv.bytes_per_row as isize)
                 }
+            }
+
+            // If any of the current positions are different from the previous ones
+            let has_new_positions = self
+                .hex_views
+                .iter()
+                .zip(prev_positions.iter())
+                .any(|(hv, &prev_pos)| hv.cur_pos != prev_pos);
+
+            // and if any hex views are also locked, we need to recalculate the diff
+            if has_new_positions && self.hex_views.iter().any(|hv| hv.pos_locked) {
+                self.diff_state.recalculate(&self.hex_views);
             }
         }
     }

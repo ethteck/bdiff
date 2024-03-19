@@ -3,7 +3,6 @@ use crate::hex_view::HexView;
 #[derive(Debug)]
 pub struct DiffState {
     pub enabled: bool,
-    pub out_of_date: bool,
     pub diffs: Vec<bool>,
 }
 
@@ -11,7 +10,6 @@ impl Default for DiffState {
     fn default() -> Self {
         Self {
             enabled: true,
-            out_of_date: false,
             diffs: Vec::new(),
         }
     }
@@ -46,7 +44,6 @@ impl DiffState {
 
     pub fn recalculate(&mut self, hex_views: &[HexView]) {
         if !self.enabled {
-            self.out_of_date = true;
             return;
         }
 
@@ -69,6 +66,5 @@ impl DiffState {
                 .all(|hv| i < hv.file.data.len() && hv.file.data[i] == hex_views[0].file.data[i]);
             self.diffs.push(diff);
         }
-        self.out_of_date = false;
     }
 }

@@ -1,0 +1,39 @@
+[package]
+name = "bdiff"
+version = "0.8.5"
+edition = "2021"
+authors = ["Ethan Roseman <ethteck@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/ethteck/bdiff"
+readme = "README.md"
+description = """
+A(nother) binary diffing tool
+"""
+publish = false
+build = "build.rs"
+
+[dependencies]
+anyhow = "1.0.81"
+argh = "0.1.12"
+dirs = "5.0.1"
+dtoa = "1.0.9"
+eframe = { version = "0.26.2", features = ["persistence"] }
+egui-modal = "0.3.5"
+egui-phosphor = "0.4.0"
+encoding_rs = "0.8.33"
+bdiff_hex_view = { version = "0.8.5", path="../hex_view" }
+iset = "0.2.2"
+log = "0.4.21"
+mapfile_parser = "2.3.7"
+notify = "6.1.1"
+parse_int = "0.6.0"
+rfd = "0.14.0"
+serde = "1.0"
+serde_json = "1.0"
+
+[target.'cfg(windows)'.build-dependencies]
+winres = "0.1.12"
+
+[build-dependencies]
+anyhow = "1.0.81"
+vergen = { version = "8.2.6", features = ["build", "cargo", "git", "gitcl"] }
