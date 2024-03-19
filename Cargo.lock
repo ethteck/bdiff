@@ -586,7 +586,7 @@ dependencies = [
 name = "bdiff_hex_view"
 version = "0.8.5"
 dependencies = [
- "eframe",
+ "egui",
  "serde",
  "serde_json",
 ]

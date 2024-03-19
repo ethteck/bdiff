@@ -1,6 +1,6 @@
 use crate::spacer::Spacer;
 
-use eframe::egui::{self, Color32, Sense, Separator};
+use egui::{self, Color32, Context, Sense, Separator};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -84,52 +84,46 @@ impl HexViewSelection {
 }
 
 #[derive(Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct Color(pub [u8; 4]);
-
-impl Color {
-    pub fn as_bytes(&self) -> &[u8; 4] {
-        &self.0
-    }
-
-    pub fn as_bytes_mut(&mut self) -> &mut [u8; 4] {
-        &mut self.0
-    }
-}
-
-impl From<Color32> for Color {
-    fn from(value: Color32) -> Self {
-        Self(value.to_array())
-    }
-}
-
-impl From<Color> for Color32 {
-    fn from(value: Color) -> Self {
-        let sc = value.0;
-        Color32::from_rgba_premultiplied(sc[0], sc[1], sc[2], sc[3])
-    }
-}
-
-#[derive(Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
-struct HexViewDisplaySettings {
-    pub selection_color: Color,
+struct HexViewStyle {
+    pub selection_color: Color32,
 
     // Offset colors
-    pub offset_text_color: Color,
-    pub offset_leading_zero_color: Color,
+    pub offset_text_color: Color32,
+    pub offset_leading_zero_color: Color32,
 
     // Hex View colors
-    pub diff_color: Color,
-    pub hex_null_color: Color,
-    pub other_hex_color: Color,
+    pub diff_color: Color32,
+    pub hex_null_color: Color32,
+    pub other_hex_color: Color32,
 
     // ASCII View colors
-    pub ascii_null_color: Color,
-    pub ascii_color: Color,
-    pub other_ascii_color: Color,
+    pub ascii_null_color: Color32,
+    pub ascii_color: Color32,
+    pub other_ascii_color: Color32,
 }
 
-struct HexView {
+impl Default for HexViewStyle {
+    fn default() -> Self {
+        Self {
+            offset_text_color: Color32::GRAY,
+            offset_leading_zero_color: Color32::DARK_GRAY,
+
+            selection_color: Color32::DARK_GREEN,
+            diff_color: Color32::RED,
+            hex_null_color: Color32::DARK_GRAY,
+            other_hex_color: Color32::GRAY,
+
+            ascii_null_color: Color32::DARK_GRAY,
+            ascii_color: Color32::LIGHT_GRAY,
+            other_ascii_color: Color32::GRAY,
+        }
+    }
+}
+
+pub struct HexView {
     pub id: usize,
+    pub ctx: Context,
+    pub style: HexViewStyle,
     pub file: BinFile,
     pub num_rows: u32,
     pub bytes_per_row: usize,
@@ -137,31 +131,10 @@ struct HexView {
     pub pos_locked: bool,
     pub selection: HexViewSelection,
     pub cursor_pos: Option<usize>,
-    pub show_selection_info: bool,
-    pub show_cursor_info: bool,
-    pub closed: bool,
-}
-
-impl Default for HexView {
-    fn default() -> Self {
-        Self {
-            id: 0,
-            file: BinFile::default(),
-            num_rows: 0,
-            bytes_per_row: 0,
-            cur_pos: 0,
-            pos_locked: false,
-            selection: HexViewSelection::default(),
-            cursor_pos: None,
-            show_selection_info: true,
-            show_cursor_info: true,
-            closed: false,
-        }
-    }
 }
 
 impl HexView {
-    pub fn new(file: BinFile, id: usize) -> Self {
+    pub fn new(ctx: Context, file: BinFile, id: usize) -> Self {
         let min_rows = 10;
         let max_rows = 25;
         let default_bytes_per_row = 0x10;
@@ -169,11 +142,22 @@ impl HexView {
 
         Self {
             id,
+            ctx,
+            style: HexViewStyle::default(),
             file,
             num_rows,
             bytes_per_row: default_bytes_per_row,
-            ..Default::default()
+            cur_pos: 0,
+            pos_locked: false,
+            selection: HexViewSelection::default(),
+            cursor_pos: None,
         }
+    }
+
+    /// Change the [`HexViewStyle`] of the HexView upon creation.
+    pub fn with_style(mut self, style: &HexViewStyle) -> Self {
+        self.style = style.clone();
+        self
     }
 
     pub fn set_cur_pos(&mut self, val: usize) {
@@ -218,13 +202,11 @@ impl HexView {
     fn show(
         &mut self,
         diff_state: &DiffState,
-        ctx: &egui::Context,
         ui: &mut egui::Ui,
         cursor_state: CursorState,
         can_selection_change: bool,
         font_size: f32,
         byte_grouping: usize,
-        display_settings: HexViewDisplaySettings,
     ) {
         let grid_rect = ui
             .group(|ui| {
@@ -266,14 +248,10 @@ impl HexView {
                                         .color({
                                             if offset_leading_zeros {
                                                 Color32::from(
-                                                    display_settings
-                                                        .offset_leading_zero_color
-                                                        .clone(),
+                                                    self.style.offset_leading_zero_color.clone(),
                                                 )
                                             } else {
-                                                Color32::from(
-                                                    display_settings.offset_text_color.clone(),
-                                                )
+                                                Color32::from(self.style.offset_text_color.clone())
                                             }
                                         }),
                                 );
@@ -312,21 +290,21 @@ impl HexView {
                                             if diff_state.enabled
                                                 && diff_state.is_diff_at(row_current_pos)
                                             {
-                                                Color32::from(display_settings.diff_color.clone())
+                                                Color32::from(self.style.diff_color.clone())
                                             } else {
                                                 match byte {
                                                     Some(0) => Color32::from(
-                                                        display_settings.hex_null_color.clone(),
+                                                        self.style.hex_null_color.clone(),
                                                     ),
                                                     _ => Color32::from(
-                                                        display_settings.other_hex_color.clone(),
+                                                        self.style.other_hex_color.clone(),
                                                     ),
                                                 }
                                             },
                                         )
                                         .background_color({
                                             if self.selection.contains(row_current_pos) {
-                                                display_settings.selection_color.clone().into()
+                                                self.style.selection_color.clone()
                                             } else {
                                                 Color32::TRANSPARENT
                                             }
@@ -345,7 +323,6 @@ impl HexView {
                                             res,
                                             cursor_state,
                                             row_current_pos,
-                                            ctx,
                                             HexViewSelectionSide::Hex,
                                         );
                                     }
@@ -379,19 +356,19 @@ impl HexView {
                                         .monospace()
                                         .size(font_size)
                                         .color(match byte {
-                                            Some(0) => Color32::from(
-                                                display_settings.ascii_null_color.clone(),
-                                            ),
-                                            Some(32..=126) => {
-                                                Color32::from(display_settings.ascii_color.clone())
+                                            Some(0) => {
+                                                Color32::from(self.style.ascii_null_color.clone())
                                             }
-                                            _ => Color32::from(
-                                                display_settings.other_ascii_color.clone(),
-                                            ),
+                                            Some(32..=126) => {
+                                                Color32::from(self.style.ascii_color.clone())
+                                            }
+                                            _ => {
+                                                Color32::from(self.style.other_ascii_color.clone())
+                                            }
                                         })
                                         .background_color({
                                             if self.selection.contains(row_current_pos) {
-                                                display_settings.selection_color.clone().into()
+                                                self.style.selection_color.clone()
                                             } else {
                                                 Color32::TRANSPARENT
                                             }
@@ -411,7 +388,6 @@ impl HexView {
                                             res,
                                             cursor_state,
                                             row_current_pos,
-                                            ctx,
                                             HexViewSelectionSide::Ascii,
                                         );
                                     }
@@ -428,7 +404,7 @@ impl HexView {
             .response
             .rect;
 
-        if let Some(cursor_pos) = ctx.input(|i| i.pointer.hover_pos()) {
+        if let Some(cursor_pos) = self.ctx.input(|i| i.pointer.hover_pos()) {
             if !grid_rect.contains(cursor_pos) {
                 self.cursor_pos = None;
             }
@@ -440,7 +416,6 @@ impl HexView {
         res: egui::Response,
         cursor_state: CursorState,
         row_current_pos: usize,
-        ctx: &egui::Context,
         side: HexViewSelectionSide,
     ) {
         if res.hovered() {
@@ -451,7 +426,7 @@ impl HexView {
             self.cursor_pos = Some(row_current_pos);
         }
 
-        if let Some(cursor_pos) = ctx.input(|i| i.pointer.hover_pos()) {
+        if let Some(cursor_pos) = self.ctx.input(|i| i.pointer.hover_pos()) {
             if res.rect.contains(cursor_pos) {
                 match cursor_state {
                     CursorState::StillDown => {
