@@ -1,5 +1,3 @@
-use crate::hex_view::HexView;
-
 #[derive(Debug)]
 pub struct DiffState {
     pub enabled: bool,
@@ -42,28 +40,22 @@ impl DiffState {
         None
     }
 
-    pub fn recalculate(&mut self, hex_views: &[HexView]) {
+    pub fn recalculate(&mut self, files: &[&[u8]]) {
         if !self.enabled {
             return;
         }
 
-        // if !self.out_of_date {
-        //     return;
-        // }
-
-        if hex_views.len() < 2 {
+        if files.len() < 2 {
             self.enabled = false;
             return;
         }
 
-        let max_size = hex_views.iter().map(|hv| hv.file.data.len()).max().unwrap();
+        let max_size = files.iter().map(|f| f.len()).max().unwrap();
 
         self.diffs = Vec::with_capacity(max_size);
 
         for i in 0..max_size {
-            let diff = !hex_views
-                .iter()
-                .all(|hv| i < hv.file.data.len() && hv.file.data[i] == hex_views[0].file.data[i]);
+            let diff = !files.iter().all(|f| i < f.len() && f[i] == files[0][i]);
             self.diffs.push(diff);
         }
     }

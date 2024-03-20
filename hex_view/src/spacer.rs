@@ -1,6 +1,6 @@
-use eframe::{
-    egui::{Response, Sense, Ui, Widget},
+use egui::{
     epaint::{vec2, Vec2},
+    {Response, Sense, Ui, Widget},
 };
 
 #[must_use = "You should put this widget in an ui with `ui.add(widget);`"]
