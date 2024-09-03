@@ -1,23 +1,24 @@
+use crate::settings;
 use std::{
     path::{Path, PathBuf},
     sync::atomic::Ordering,
 };
-
-use anyhow::Error;
-use bdiff_hex_view::{CursorState, HexViewSelection, HexViewSelectionSide, HexViewSelectionState};
-use eframe::{
-    egui::{self, Checkbox, Style, ViewportCommand},
-    epaint::{Rounding, Shadow},
-};
-use egui_modal::Modal;
 
 use crate::{
     bin_file::BinFile,
     config::{read_json_config, write_json_config, Config, FileConfig},
     diff_state::DiffState,
     file_view::FileView,
-    settings::{read_json_settings, write_json_settings, ByteGrouping, Settings},
+    settings::{read_json_settings, show_theme_settings, write_json_settings, Settings},
 };
+use anyhow::Error;
+use bdiff_hex_view::{CursorState, HexViewSelection, HexViewSelectionSide, HexViewSelectionState};
+use eframe::egui::{Align, Layout, RichText, Ui};
+use eframe::{
+    egui::{self, Checkbox, Context, Style, ViewportCommand},
+    epaint::{Rounding, Shadow},
+};
+use egui_modal::Modal;
 
 #[derive(Default)]
 struct GotoModal {
@@ -53,7 +54,7 @@ pub struct BdiffApp {
     global_selection: HexViewSelection, // the selection that all hex views will mirror
     selecting_hv: Option<usize>,
     last_selected_hv: Option<usize>,
-    settings_open: bool,
+    bottom_bar_open: bool,
     settings: Settings,
     config: Config,
     started_with_arguments: bool,
@@ -140,7 +141,7 @@ impl BdiffApp {
         self.file_views.iter_mut().find(|fv| fv.id == id)
     }
 
-    fn handle_hex_view_input(&mut self, ctx: &egui::Context) {
+    fn handle_hex_view_input(&mut self, ctx: &Context) {
         if ctx.input(|i| i.modifiers.shift) {
             // Move selection
             if let Some(fv) = self.last_selected_hv {
@@ -299,138 +300,9 @@ impl BdiffApp {
             }
         }
     }
-
-    fn show_settings(&mut self, ctx: &egui::Context) {
-        egui::Window::new("Settings")
-            .default_open(true)
-            .show(ctx, |ui| {
-                if ui.button("Restore defaults").clicked() {
-                    self.settings = Settings::default();
-                    write_json_settings(&self.settings).expect("Failed to save settings!");
-                }
-
-                // Byte Grouping
-                ui.horizontal(|ui| {
-                    ui.label("Byte grouping");
-                    egui::ComboBox::from_id_source("byte_grouping_dropdown")
-                        .selected_text(self.settings.byte_grouping.to_string())
-                        .show_ui(ui, |ui| {
-                            for value in ByteGrouping::get_all_options() {
-                                if ui
-                                    .selectable_value(
-                                        &mut self.settings.byte_grouping,
-                                        value,
-                                        value.to_string(),
-                                    )
-                                    .clicked()
-                                {
-                                    // A setting has been changed, save changes
-                                    write_json_settings(&self.settings)
-                                        .expect("Failed to save settings!");
-                                }
-                            }
-                        });
-                });
-
-                egui::CollapsingHeader::new("Theme settings").show(ui, |ui| {
-                    egui::Frame::group(&Style::default()).show(ui, |ui| {
-                        egui::Grid::new("offset_colors").show(ui, |ui| {
-                            ui.heading("Offset colors");
-                            ui.end_row();
-
-                            ui.label("Offset text color");
-                            ui.color_edit_button_srgba_premultiplied(
-                                self.settings
-                                    .theme_settings
-                                    .offset_text_color
-                                    .as_bytes_mut(),
-                            );
-                            ui.end_row();
-
-                            ui.label("Leading zero color");
-                            ui.color_edit_button_srgba_premultiplied(
-                                self.settings
-                                    .theme_settings
-                                    .offset_leading_zero_color
-                                    .as_bytes_mut(),
-                            );
-                            ui.end_row();
-                        });
-                    });
-
-                    egui::Frame::group(&Style::default()).show(ui, |ui| {
-                        egui::Grid::new("hex_view_colors").show(ui, |ui| {
-                            ui.heading("Hex area colors");
-                            ui.end_row();
-
-                            ui.label("Selection color");
-                            ui.color_edit_button_srgba_premultiplied(
-                                self.settings.theme_settings.selection_color.as_bytes_mut(),
-                            );
-                            ui.end_row();
-
-                            ui.label("Diff color");
-                            ui.color_edit_button_srgba_premultiplied(
-                                self.settings.theme_settings.diff_color.as_bytes_mut(),
-                            );
-                            ui.end_row();
-
-                            ui.label("Null color");
-                            ui.color_edit_button_srgba_premultiplied(
-                                self.settings.theme_settings.hex_null_color.as_bytes_mut(),
-                            );
-                            ui.end_row();
-
-                            ui.label("Other color");
-                            ui.color_edit_button_srgba_premultiplied(
-                                self.settings.theme_settings.other_hex_color.as_bytes_mut(),
-                            );
-                            ui.end_row();
-                        });
-                    });
-
-                    egui::Frame::group(&Style::default()).show(ui, |ui| {
-                        egui::Grid::new("ascii_view_colors").show(ui, |ui| {
-                            ui.heading("Ascii area colors");
-                            ui.end_row();
-
-                            ui.label("Null color");
-                            ui.color_edit_button_srgba_premultiplied(
-                                self.settings.theme_settings.ascii_null_color.as_bytes_mut(),
-                            );
-                            ui.end_row();
-
-                            ui.label("Ascii color");
-                            ui.color_edit_button_srgba_premultiplied(
-                                self.settings.theme_settings.ascii_color.as_bytes_mut(),
-                            );
-                            ui.end_row();
-
-                            ui.label("Other color");
-                            ui.color_edit_button_srgba_premultiplied(
-                                self.settings
-                                    .theme_settings
-                                    .other_ascii_color
-                                    .as_bytes_mut(),
-                            );
-                            ui.end_row();
-                        });
-                    });
-
-                    ui.horizontal(|ui| {
-                        if ui.button("Reload").clicked() {
-                            self.settings = read_json_settings().expect("Failed to read settings!");
-                        }
-                        if ui.button("Save").clicked() {
-                            write_json_settings(&self.settings).expect("Failed to save settings!");
-                        }
-                    });
-                })
-            });
-    }
 }
 
-fn set_up_custom_fonts(ctx: &egui::Context) {
+fn set_up_custom_fonts(ctx: &Context) {
     // Start with the default fonts (we will be adding to them rather than replacing them).
     let mut fonts = egui::FontDefinitions::default();
 
@@ -473,19 +345,9 @@ fn set_up_custom_fonts(ctx: &egui::Context) {
 
 impl eframe::App for BdiffApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        let mut style: egui::Style = (*ctx.style()).clone();
-        style.visuals.popup_shadow = Shadow {
-            offset: Default::default(),
-            blur: 0.0,
-            color: egui::Color32::TRANSPARENT,
-            spread: 0.0,
-        };
-        style.visuals.window_shadow = Shadow {
-            offset: Default::default(),
-            blur: 0.0,
-            color: egui::Color32::TRANSPARENT,
-            spread: 0.0,
-        };
+        let mut style: Style = (*ctx.style()).clone();
+        style.visuals.popup_shadow = Shadow::NONE;
+        style.visuals.window_shadow = Shadow::NONE;
         style.visuals.menu_rounding = Rounding::default();
         style.visuals.window_rounding = Rounding::default();
         style.interaction.selectable_labels = false;
@@ -518,11 +380,6 @@ impl eframe::App for BdiffApp {
             overwrite_modal.open();
         }
 
-        // Standard HexView input
-        if !(overwrite_modal.is_open() || goto_modal.is_open()) {
-            self.handle_hex_view_input(ctx);
-        }
-
         if ctx.input(|i| i.key_pressed(egui::Key::G)) {
             if goto_modal.is_open() {
                 goto_modal.close();
@@ -530,6 +387,11 @@ impl eframe::App for BdiffApp {
                 self.goto_modal.value = "0x".to_owned();
                 goto_modal.open();
             }
+        }
+
+        // Standard HexView input
+        if !(overwrite_modal.is_open() || goto_modal.is_open()) {
+            self.handle_hex_view_input(ctx);
         }
 
         // Open dropped files
@@ -595,12 +457,31 @@ impl eframe::App for BdiffApp {
                         ctx.send_viewport_cmd(ViewportCommand::Close)
                     }
                 });
+
+                ui.menu_button("Action", |ui| {
+                    if ui.button("Go to address (G)").clicked() {
+                        self.goto_modal.value = "0x".to_owned();
+                        goto_modal.open();
+                        ui.close_menu();
+                    }
+                });
+
+                ui.menu_button("Preferences", |ui| {
+                    if ui.button("Theme Settings").clicked() {
+                        self.settings.theme_menu_open = !self.settings.theme_menu_open;
+                    }
+                });
+
                 ui.menu_button("Options", |ui| {
                     let diff_checkbox = Checkbox::new(&mut self.diff_state.enabled, "Display diff");
                     let mirror_selection_checkbox = Checkbox::new(
                         &mut self.options.mirror_selection,
                         "Mirror selection across files",
                     );
+
+                    ui.label("Diff View");
+
+                    settings::byte_grouping_slider(ui, &mut self.settings.byte_grouping);
 
                     // if ui
                     //     .add_enabled(self.file_views.len() > 1, diff_checkbox)
@@ -611,19 +492,25 @@ impl eframe::App for BdiffApp {
                     // }
 
                     ui.add_enabled(self.file_views.len() > 1, mirror_selection_checkbox);
-                    if ui.button("Settings").clicked() {
-                        self.settings_open = !self.settings_open;
-                    }
-                });
-                ui.menu_button("Action", |ui| {
-                    if ui.button("Go to address (G)").clicked() {
-                        self.goto_modal.value = "0x".to_owned();
-                        goto_modal.open();
-                        ui.close_menu();
-                    }
+
+                    ui.separator();
+                    ui.label("General Interface");
+                    ui.add(Checkbox::new(
+                        &mut self.bottom_bar_open,
+                        "Show Quick Access bar",
+                    ));
                 });
             })
         });
+
+        // Quick Access bar
+        if self.bottom_bar_open {
+            egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
+                ui.with_layout(Layout::right_to_left(Align::LEFT), |ui| {
+                    settings::byte_grouping_slider(ui, &mut self.settings.byte_grouping);
+                });
+            });
+        }
 
         // Reload changed files
         let mut calc_diff = false;
@@ -740,8 +627,8 @@ impl eframe::App for BdiffApp {
             self.recalculate_diffs()
         }
 
-        if self.settings_open {
-            self.show_settings(ctx);
+        if self.settings.theme_menu_open {
+            show_theme_settings(ctx, &mut self.settings);
         }
     }
 }
@@ -775,14 +662,14 @@ impl BdiffApp {
         });
     }
 
-    fn show_goto_modal(&mut self, goto_modal: &Modal, ui: &mut egui::Ui, ctx: &egui::Context) {
+    fn show_goto_modal(&mut self, goto_modal: &Modal, ui: &mut Ui, ctx: &Context) {
         goto_modal.title(ui, "Go to address");
         ui.label("Enter a hex address to go to");
 
         ui.text_edit_singleline(&mut self.goto_modal.value)
             .request_focus();
 
-        ui.label(egui::RichText::new(self.goto_modal.status.clone()).color(egui::Color32::RED));
+        ui.label(RichText::new(self.goto_modal.status.clone()).color(egui::Color32::RED));
 
         goto_modal.buttons(ui, |ui| {
             if ui.button("Go").clicked() || ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
