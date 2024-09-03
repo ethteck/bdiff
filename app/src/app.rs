@@ -6,7 +6,7 @@ use std::{
 use anyhow::Error;
 use bdiff_hex_view::{CursorState, HexViewSelection, HexViewSelectionSide, HexViewSelectionState};
 use eframe::{
-    egui::{self, Checkbox, Context, Style, ViewportCommand},
+    egui::{self, Checkbox, Style, ViewportCommand},
     epaint::{Rounding, Shadow},
 };
 use egui_modal::Modal;
@@ -554,7 +554,7 @@ impl eframe::App for BdiffApp {
                             .collect::<Vec<String>>()
                             .join(" "),
                         HexViewSelectionSide::Ascii => {
-                            String::from_utf8_lossy(&selected_bytes).to_string()
+                            String::from_utf8_lossy(selected_bytes).to_string()
                         }
                     };
                     // convert selected_bytes to an ascii string

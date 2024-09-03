@@ -73,9 +73,7 @@ impl StringViewer {
                         ui.add(egui::Label::new(egui::RichText::new("UTF-16").monospace()));
                         ui.text_edit_singleline(
                             &mut encoding
-                                .decode_without_bom_handling_and_without_replacement(
-                                    &selected_bytes,
-                                )
+                                .decode_without_bom_handling_and_without_replacement(selected_bytes)
                                 .unwrap_or_default()
                                 .to_string(),
                         );
@@ -86,9 +84,7 @@ impl StringViewer {
                         ui.add(egui::Label::new(egui::RichText::new("EUC-JP").monospace()));
                         ui.text_edit_singleline(
                             &mut EUC_JP
-                                .decode_without_bom_handling_and_without_replacement(
-                                    &selected_bytes,
-                                )
+                                .decode_without_bom_handling_and_without_replacement(selected_bytes)
                                 .unwrap_or_default()
                                 .to_string(),
                         );
@@ -101,9 +97,7 @@ impl StringViewer {
                         ));
                         ui.text_edit_singleline(
                             &mut SHIFT_JIS
-                                .decode_without_bom_handling_and_without_replacement(
-                                    &selected_bytes,
-                                )
+                                .decode_without_bom_handling_and_without_replacement(selected_bytes)
                                 .unwrap_or_default()
                                 .to_string(),
                         );

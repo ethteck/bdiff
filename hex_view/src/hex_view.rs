@@ -239,9 +239,9 @@ impl HexView {
                                 .font(font_id.clone())
                                 .color({
                                     if offset_leading_zeros {
-                                        Color32::from(self.style.offset_leading_zero_color.clone())
+                                        self.style.offset_leading_zero_color
                                     } else {
-                                        Color32::from(self.style.offset_text_color.clone())
+                                        self.style.offset_text_color
                                     }
                                 }),
                         );
@@ -279,16 +279,16 @@ impl HexView {
                                     // if diff_state.enabled
                                     //     && diff_state.is_diff_at(row_current_pos)
                                     // {
-                                    //     Color32::from(self.style.diff_color.clone())
+                                    //     self.style.diff_color
                                     // } else {
                                     match byte {
-                                        Some(0) => Color32::from(self.style.hex_null_color.clone()),
-                                        _ => Color32::from(self.style.other_hex_color.clone()),
+                                        Some(0) => self.style.hex_null_color,
+                                        _ => self.style.other_hex_color,
                                     }, // },
                                 )
                                 .background_color({
                                     if self.selection.contains(row_current_pos) {
-                                        self.style.selection_color.clone()
+                                        self.style.selection_color
                                     } else {
                                         Color32::TRANSPARENT
                                     }
@@ -340,13 +340,13 @@ impl HexView {
                             egui::RichText::new(ascii_char)
                                 .font(font_id.clone())
                                 .color(match byte {
-                                    Some(0) => Color32::from(self.style.ascii_null_color.clone()),
-                                    Some(32..=126) => Color32::from(self.style.ascii_color.clone()),
-                                    _ => Color32::from(self.style.other_ascii_color.clone()),
+                                    Some(0) => self.style.ascii_null_color,
+                                    Some(32..=126) => self.style.ascii_color,
+                                    _ => self.style.other_ascii_color,
                                 })
                                 .background_color({
                                     if self.selection.contains(row_current_pos) {
-                                        self.style.selection_color.clone()
+                                        self.style.selection_color
                                     } else {
                                         Color32::TRANSPARENT
                                     }
