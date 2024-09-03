@@ -244,11 +244,9 @@ impl HexView {
                                         .size(font_size)
                                         .color({
                                             if offset_leading_zeros {
-                                                Color32::from(
-                                                    self.style.offset_leading_zero_color.clone(),
-                                                )
+                                                self.style.offset_leading_zero_color
                                             } else {
-                                                Color32::from(self.style.offset_text_color.clone())
+                                                self.style.offset_text_color
                                             }
                                         }),
                                 );
@@ -290,17 +288,13 @@ impl HexView {
                                             //     Color32::from(self.style.diff_color.clone())
                                             // } else {
                                             match byte {
-                                                Some(0) => {
-                                                    Color32::from(self.style.hex_null_color.clone())
-                                                }
-                                                _ => Color32::from(
-                                                    self.style.other_hex_color.clone(),
-                                                ),
+                                                Some(0) => self.style.hex_null_color,
+                                                _ => self.style.other_hex_color,
                                             }, // },
                                         )
                                         .background_color({
                                             if self.selection.contains(row_current_pos) {
-                                                self.style.selection_color.clone()
+                                                self.style.selection_color
                                             } else {
                                                 Color32::TRANSPARENT
                                             }
@@ -352,19 +346,17 @@ impl HexView {
                                         .monospace()
                                         .size(font_size)
                                         .color(match byte {
-                                            Some(0) => {
-                                                Color32::from(self.style.ascii_null_color.clone())
-                                            }
+                                            Some(0) => self.style.ascii_null_color,
                                             Some(32..=126) => {
-                                                Color32::from(self.style.ascii_color.clone())
+                                                self.style.ascii_color
                                             }
                                             _ => {
-                                                Color32::from(self.style.other_ascii_color.clone())
+                                                self.style.other_ascii_color
                                             }
                                         })
                                         .background_color({
                                             if self.selection.contains(row_current_pos) {
-                                                self.style.selection_color.clone()
+                                                self.style.selection_color
                                             } else {
                                                 Color32::TRANSPARENT
                                             }

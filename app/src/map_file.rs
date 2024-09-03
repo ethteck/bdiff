@@ -80,7 +80,7 @@ fn collect_data(path: PathBuf) -> IntervalMap<usize, MapFileEntry> {
 
     let mut mf: mapfile_parser::MapFile = mapfile_parser::MapFile::new();
 
-    mf.read_map_file(path);
+    mf.read_map_file(path.as_path());
 
     for segment in &mf.segments_list {
         for file in &segment.files_list {
