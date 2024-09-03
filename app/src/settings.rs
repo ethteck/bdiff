@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     fs::{File, OpenOptions},
     io::Write,
     path::PathBuf,
@@ -36,16 +37,15 @@ impl ByteGrouping {
     }
 }
 
-impl ToString for ByteGrouping {
-    fn to_string(&self) -> String {
+impl Display for ByteGrouping {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::One => "One",
-            Self::Two => "Two",
-            Self::Four => "Four",
-            Self::Eight => "Eight",
-            Self::Sixteen => "Sixteen",
+            Self::One => write!(f, "One"),
+            Self::Two => write!(f, "Two"),
+            Self::Four => write!(f, "Four"),
+            Self::Eight => write!(f, "Eight"),
+            Self::Sixteen => write!(f, "Sixteen"),
         }
-        .to_string()
     }
 }
 

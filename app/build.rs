@@ -1,5 +1,5 @@
 use anyhow::Result;
-use vergen::EmitBuilder;
+use vergen_gitcl::{BuildBuilder, CargoBuilder, Emitter, GitclBuilder};
 
 fn main() -> Result<()> {
     #[cfg(windows)]
@@ -8,10 +8,11 @@ fn main() -> Result<()> {
             .set_icon("assets/icon.ico")
             .compile()?;
     }
-    EmitBuilder::builder()
+
+    Emitter::default()
         .fail_on_error()
-        .all_build()
-        .all_cargo()
-        .all_git()
+        .add_instructions(&BuildBuilder::all_build()?)?
+        .add_instructions(&CargoBuilder::all_cargo()?)?
+        .add_instructions(&GitclBuilder::all_git()?)?
         .emit()
 }

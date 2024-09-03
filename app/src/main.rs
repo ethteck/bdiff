@@ -38,6 +38,6 @@ fn main() {
     let _ = eframe::run_native(
         "bdiff",
         native_options,
-        Box::new(|cc| Box::new(BdiffApp::new(cc, args.files))),
+        Box::new(|cc| Ok(Box::new(BdiffApp::new(cc, args.files)))),
     );
 }
