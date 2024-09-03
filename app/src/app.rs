@@ -13,7 +13,7 @@ use crate::{
 };
 use anyhow::Error;
 use bdiff_hex_view::{CursorState, HexViewSelection, HexViewSelectionSide, HexViewSelectionState};
-use eframe::egui::{Align, Layout, RichText, Ui};
+use eframe::egui::{Align, Layout, Modifiers, RichText, Ui};
 use eframe::{
     egui::{self, Checkbox, Context, Style, ViewportCommand},
     epaint::{Rounding, Shadow},
@@ -148,36 +148,36 @@ impl BdiffApp {
                 if let Some(fv) = self.get_hex_view_by_id(fv) {
                     let mut changed = false;
                     if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft))
-                        && fv.selection.start() > 0
-                        && fv.selection.end() > 0
+                        && fv.hv.selection.start() > 0
+                        && fv.hv.selection.end() > 0
                     {
-                        fv.selection.adjust_cur_pos(-1);
+                        fv.hv.selection.adjust_cur_pos(-1);
                         changed = true;
                     }
                     if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight))
-                        && fv.selection.start() < fv.file.data.len() - 1
-                        && fv.selection.end() < fv.file.data.len() - 1
+                        && fv.hv.selection.start() < fv.file.data.len() - 1
+                        && fv.hv.selection.end() < fv.file.data.len() - 1
                     {
-                        fv.selection.adjust_cur_pos(1);
+                        fv.hv.selection.adjust_cur_pos(1);
                         changed = true;
                     }
                     if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp))
-                        && fv.selection.start() >= fv.bytes_per_row
-                        && fv.selection.end() >= fv.bytes_per_row
+                        && fv.hv.selection.start() >= fv.bytes_per_row
+                        && fv.hv.selection.end() >= fv.bytes_per_row
                     {
-                        fv.selection.adjust_cur_pos(-(fv.bytes_per_row as isize));
+                        fv.hv.selection.adjust_cur_pos(-(fv.bytes_per_row as isize));
                         changed = true;
                     }
                     if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown))
-                        && fv.selection.start() < fv.file.data.len() - fv.bytes_per_row
-                        && fv.selection.end() < fv.file.data.len() - fv.bytes_per_row
+                        && fv.hv.selection.start() < fv.file.data.len() - fv.bytes_per_row
+                        && fv.hv.selection.end() < fv.file.data.len() - fv.bytes_per_row
                     {
-                        fv.selection.adjust_cur_pos(fv.bytes_per_row as isize);
+                        fv.hv.selection.adjust_cur_pos(fv.bytes_per_row as isize);
                         changed = true;
                     }
 
                     if changed {
-                        self.global_selection = fv.selection.clone();
+                        self.global_selection = fv.hv.selection.clone();
                     }
                 }
             }
@@ -188,6 +188,8 @@ impl BdiffApp {
                 .iter()
                 .map(|fv| fv.cur_pos)
                 .collect::<Vec<usize>>();
+
+            let diffing = self.file_views.len() > 1 && self.diff_state.enabled;
 
             for fv in self.file_views.iter_mut() {
                 // Keys
@@ -231,7 +233,7 @@ impl BdiffApp {
                 if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                     let last_byte = fv.cur_pos + fv.hv.bytes_per_screen(&fv.file.data);
 
-                    if self.diff_state.enabled {
+                    if diffing {
                         if last_byte < fv.file.data.len() {
                             match self.diff_state.get_next_diff(last_byte) {
                                 Some(next_diff) => {
@@ -409,7 +411,7 @@ impl eframe::App for BdiffApp {
                 if self.last_selected_hv.is_some() && fv.id == self.last_selected_hv.unwrap() {
                     let selected_bytes = fv.hv.get_selected_bytes(&fv.file.data);
 
-                    let selected_bytes: String = match fv.selection.side {
+                    let selected_bytes: String = match fv.hv.selection.side {
                         HexViewSelectionSide::Hex => selected_bytes
                             .iter()
                             .map(|b| format!("{:02X}", b))
@@ -483,13 +485,13 @@ impl eframe::App for BdiffApp {
 
                     settings::byte_grouping_slider(ui, &mut self.settings.byte_grouping);
 
-                    // if ui
-                    //     .add_enabled(self.file_views.len() > 1, diff_checkbox)
-                    //     .clicked()
-                    //     && self.diff_state.enabled
-                    // {
-                    //     self.recalculate_diffs()
-                    // }
+                    if ui
+                        .add_enabled(self.file_views.len() > 1, diff_checkbox)
+                        .clicked()
+                        && self.diff_state.enabled
+                    {
+                        //self.recalculate_diffs()
+                    }
 
                     ui.add_enabled(self.file_views.len() > 1, mirror_selection_checkbox);
 
@@ -516,83 +518,80 @@ impl eframe::App for BdiffApp {
         let mut calc_diff = false;
 
         // Main panel
-        egui::CentralPanel::default().show(ctx, |_ui| {
-            // TODO unused CentralPanel
-            for fv in self.file_views.iter_mut() {
-                let cur_sel = fv.selection.clone();
-                let can_selection_change = match self.selecting_hv {
-                    Some(id) => id == fv.id,
-                    None => true,
-                };
-                fv.show(
-                    &mut self.config,
-                    &self.settings,
-                    &self.diff_state,
-                    ctx,
-                    cursor_state,
-                    can_selection_change,
-                );
-                if fv.selection != cur_sel {
-                    match fv.selection.state {
-                        HexViewSelectionState::Selecting => {
-                            self.selecting_hv = Some(fv.id);
-                            self.last_selected_hv = Some(fv.id);
-                        }
-                        _ => {
-                            self.selecting_hv = None;
-                        }
+        for fv in self.file_views.iter_mut() {
+            let cur_sel = fv.hv.selection.clone();
+            let can_selection_change = match self.selecting_hv {
+                Some(id) => id == fv.id,
+                None => true,
+            };
+            fv.show(
+                &mut self.config,
+                &self.settings,
+                &self.diff_state,
+                ctx,
+                cursor_state,
+                can_selection_change,
+            );
+            if fv.hv.selection != cur_sel {
+                match fv.hv.selection.state {
+                    HexViewSelectionState::Selecting => {
+                        self.selecting_hv = Some(fv.id);
+                        self.last_selected_hv = Some(fv.id);
                     }
-                    self.global_selection = fv.selection.clone();
-                }
-
-                if cursor_state == CursorState::Released {
-                    // If we released the mouse button somewhere else, end the selection
-                    // The state wouldn't be Selecting if we had captured the release event inside the fv
-                    if fv.selection.state == HexViewSelectionState::Selecting {
-                        fv.selection.state = HexViewSelectionState::Selected;
+                    _ => {
+                        self.selecting_hv = None;
                     }
                 }
+                self.global_selection = fv.hv.selection.clone();
             }
 
             if cursor_state == CursorState::Released {
-                self.selecting_hv = None;
-                if self.global_selection.state == HexViewSelectionState::Selecting {
-                    self.global_selection.state = HexViewSelectionState::Selected;
+                // If we released the mouse button somewhere else, end the selection
+                // The state wouldn't be Selecting if we had captured the release event inside the fv
+                if fv.hv.selection.state == HexViewSelectionState::Selecting {
+                    fv.hv.selection.state = HexViewSelectionState::Selected;
                 }
             }
+        }
 
-            if self.options.mirror_selection {
-                for fv in self.file_views.iter_mut() {
-                    if fv.selection != self.global_selection {
-                        fv.selection = self.global_selection.clone();
-                        if fv.selection.start() >= fv.file.data.len()
-                            || fv.selection.end() >= fv.file.data.len()
-                        {
-                            fv.selection.clear()
-                        }
+        if cursor_state == CursorState::Released {
+            self.selecting_hv = None;
+            if self.global_selection.state == HexViewSelectionState::Selecting {
+                self.global_selection.state = HexViewSelectionState::Selected;
+            }
+        }
+
+        if self.options.mirror_selection {
+            for fv in self.file_views.iter_mut() {
+                if fv.hv.selection != self.global_selection {
+                    fv.hv.selection = self.global_selection.clone();
+                    if fv.hv.selection.start() >= fv.file.data.len()
+                        || fv.hv.selection.end() >= fv.file.data.len()
+                    {
+                        fv.hv.selection.clear()
                     }
                 }
             }
+        }
 
-            // Delete any closed hex views
-            self.file_views.retain(|fv| {
-                calc_diff = calc_diff || fv.closed;
-                let delete: bool = { fv.closed };
+        // Delete any closed hex views
+        self.file_views.retain(|fv| {
+            calc_diff = calc_diff || fv.closed;
+            let delete: bool = { fv.closed };
 
-                if let Some(id) = self.last_selected_hv {
-                    if fv.id == id {
-                        self.last_selected_hv = None;
-                    }
+            if let Some(id) = self.last_selected_hv {
+                if delete && fv.id == id {
+                    self.last_selected_hv = None;
                 }
-
-                !delete
-            });
-
-            // If we have no hex views left, don't keep track of any selection
-            if self.file_views.is_empty() {
-                self.global_selection.clear();
             }
+
+            !delete
         });
+
+        // If we have no hex views left, don't keep track of any selection
+        if self.file_views.is_empty() {
+            self.global_selection.clear();
+        }
 
         // File reloading
         for fv in self.file_views.iter_mut() {
@@ -624,7 +623,7 @@ impl eframe::App for BdiffApp {
         }
 
         if calc_diff {
-            self.recalculate_diffs()
+            self.recalculate_diffs();
         }
 
         if self.settings.theme_menu_open {
@@ -635,8 +634,12 @@ impl eframe::App for BdiffApp {
 
 impl BdiffApp {
     fn recalculate_diffs(&mut self) {
-        //self.diff_state.recalculate();
-        // TODO FIX
+        let files: &[&[u8]] = &self
+            .file_views
+            .iter()
+            .map(|fv| fv.file.data.as_slice())
+            .collect::<Vec<&[u8]>>();
+        self.diff_state.recalculate(files);
     }
 
     fn show_overwrite_modal(&mut self, modal: &Modal) {
@@ -672,7 +675,9 @@ impl BdiffApp {
         ui.label(RichText::new(self.goto_modal.status.clone()).color(egui::Color32::RED));
 
         goto_modal.buttons(ui, |ui| {
-            if ui.button("Go").clicked() || ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+            if ui.button("Go").clicked()
+                || ctx.input_mut(|i| i.consume_key(Modifiers::NONE, egui::Key::Enter))
+            {
                 let pos: Option<usize> = parse_int::parse(&self.goto_modal.value).ok();
 
                 match pos {
@@ -694,7 +699,7 @@ impl BdiffApp {
                 goto_modal.close();
             };
 
-            if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            if ctx.input_mut(|i| i.consume_key(Modifiers::NONE, egui::Key::Escape)) {
                 goto_modal.close();
             }
         });

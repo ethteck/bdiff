@@ -8,6 +8,7 @@ use iset::IntervalMap;
 
 use crate::watcher::create_watcher;
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct MapFileEntry {
     pub seg_name: String,

@@ -1,5 +1,5 @@
 use anyhow::Error;
-use bdiff_hex_view::{CursorState, HexView, HexViewSelection, HexViewSelectionState};
+use bdiff_hex_view::{CursorState, HexView, HexViewSelectionState};
 use eframe::egui::FontId;
 use eframe::{
     egui::{self, Id},
@@ -23,8 +23,6 @@ pub struct FileView {
     pub bytes_per_row: usize,
     pub cur_pos: usize,
     pub pos_locked: bool,
-    pub selection: HexViewSelection,
-    pub cursor_pos: Option<usize>,
     pub show_selection_info: bool,
     pub show_cursor_info: bool,
     pub hv: HexView,
@@ -44,8 +42,6 @@ impl FileView {
             bytes_per_row: default_bytes_per_row,
             cur_pos: 0,
             pos_locked: false,
-            selection: HexViewSelection::default(),
-            cursor_pos: None,
             show_selection_info: true,
             show_cursor_info: true,
             hv: HexView::new(id),
@@ -59,13 +55,15 @@ impl FileView {
     pub fn reload_file(&mut self) -> Result<(), Error> {
         self.file.data = read_file_bytes(self.file.path.clone())?;
 
-        if self.selection.range.first >= self.file.data.len()
-            && self.selection.range.second >= self.file.data.len()
+        if self.hv.selection.range.first >= self.file.data.len()
+            && self.hv.selection.range.second >= self.file.data.len()
         {
-            self.selection.clear();
+            self.hv.selection.clear();
         } else {
-            self.selection.range.first = self.selection.range.first.min(self.file.data.len() - 1);
-            self.selection.range.second = self.selection.range.second.min(self.file.data.len() - 1);
+            self.hv.selection.range.first =
+                self.hv.selection.range.first.min(self.file.data.len() - 1);
+            self.hv.selection.range.second =
+                self.hv.selection.range.second.min(self.file.data.len() - 1);
         }
         Ok(())
     }
@@ -172,11 +170,11 @@ impl FileView {
                             });
 
                             if self.show_selection_info {
-                                let selection_text = match self.selection.state {
+                                let selection_text = match self.hv.selection.state {
                                     HexViewSelectionState::None => "No selection".to_owned(),
                                     _ => {
-                                        let start = self.selection.start();
-                                        let end = self.selection.end();
+                                        let start = self.hv.selection.start();
+                                        let end = self.hv.selection.end();
                                         let length = end - start + 1;
 
                                         let map_entry = match self.mt.map_file {
@@ -215,7 +213,7 @@ impl FileView {
                             }
 
                             if self.show_cursor_info {
-                                let hover_text = match self.cursor_pos {
+                                let hover_text = match self.hv.cursor_pos {
                                     Some(pos) => {
                                         let map_entry = match self.mt.map_file {
                                             Some(ref map_file) => map_file.get_entry(pos, pos + 1),

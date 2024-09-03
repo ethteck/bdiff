@@ -299,7 +299,7 @@ impl HexView {
                         let res = ui.add(hex_label);
 
                         if byte.is_some() {
-                            if res.hovered() {
+                            if res.contains_pointer() {
                                 self.cursor_pos = Some(row_current_pos);
                             }
                             if can_selection_change {
@@ -358,7 +358,7 @@ impl HexView {
                         ui.add(Spacer::default().spacing_x(1.0));
 
                         if byte.is_some() {
-                            if res.hovered() {
+                            if res.contains_pointer() {
                                 self.cursor_pos = Some(row_current_pos);
                             }
                             if can_selection_change {
