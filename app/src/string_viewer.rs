@@ -28,7 +28,7 @@ impl StringViewer {
         &mut self,
         ui: &mut egui::Ui,
         hv_id: usize,
-        selected_bytes: Vec<u8>,
+        selected_bytes: &[u8],
         endianness: Endianness,
     ) {
         if !self.show {
@@ -59,7 +59,7 @@ impl StringViewer {
                     if self.utf8 {
                         ui.add(egui::Label::new(egui::RichText::new("UTF-8").monospace()));
                         ui.text_edit_singleline(
-                            &mut String::from_utf8(selected_bytes.clone()).unwrap_or_default(),
+                            &mut String::from_utf8_lossy(selected_bytes).into_owned(),
                         );
                         ui.end_row();
                     }

@@ -1,7 +1,8 @@
 use anyhow::Error;
 use bdiff_hex_view::{CursorState, HexView, HexViewSelection, HexViewSelectionState};
+use eframe::egui::FontId;
 use eframe::{
-    egui::{self, Context, Id},
+    egui::{self, Id},
     epaint::Color32,
 };
 
@@ -35,12 +36,11 @@ pub struct FileView {
 }
 
 impl FileView {
-    pub fn new(ctx: &Context, file: BinFile, id: usize) -> Self {
+    pub fn new(file: BinFile, id: usize) -> Self {
         let min_rows = 10;
         let max_rows = 25;
         let default_bytes_per_row = 0x10;
         let num_rows = (file.data.len() / default_bytes_per_row).clamp(min_rows, max_rows) as u32;
-        let file_bytes = file.data.clone();
 
         Self {
             id,
@@ -53,7 +53,7 @@ impl FileView {
             cursor_pos: None,
             show_selection_info: true,
             show_cursor_info: true,
-            hv: HexView::new(&ctx, &file_bytes, id),
+            hv: HexView::new(id),
             sv: StringViewer::default(),
             dv: DataViewer::default(),
             mt: MapTool::default(),
@@ -165,13 +165,16 @@ impl FileView {
                     egui::Layout::left_to_right(eframe::emath::Align::Min),
                     |ui: &mut egui::Ui| {
                         ui.vertical(|ui| {
-                            self.hv.show(
-                                ui,
-                                cursor_state,
-                                can_selection_change,
-                                font_size,
-                                settings.byte_grouping.into(),
-                            );
+                            ui.group(|ui| {
+                                self.hv.show(
+                                    ui,
+                                    &self.file.data,
+                                    cursor_state,
+                                    can_selection_change,
+                                    FontId::monospace(font_size),
+                                    settings.byte_grouping.into(),
+                                );
+                            });
 
                             if self.show_selection_info {
                                 let selection_text = match self.selection.state {
@@ -246,13 +249,13 @@ impl FileView {
                             self.dv.display(
                                 ui,
                                 self.id,
-                                self.hv.get_selected_bytes(),
+                                self.hv.get_selected_bytes(&self.file.data),
                                 self.file.endianness,
                             );
                             self.sv.display(
                                 ui,
                                 self.id,
-                                self.hv.get_selected_bytes(),
+                                self.hv.get_selected_bytes(&self.file.data),
                                 self.file.endianness,
                             );
                             self.mt.display(ui);

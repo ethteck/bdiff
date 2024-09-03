@@ -105,7 +105,7 @@ impl BdiffApp {
         };
 
         for file in config.files.iter() {
-            match ret.open_file(&file.path, &cc.egui_ctx) {
+            match ret.open_file(&file.path) {
                 Ok(fv) => {
                     if let Some(map) = file.map.as_ref() {
                         fv.mt.load_file(map);
@@ -122,12 +122,12 @@ impl BdiffApp {
         ret
     }
 
-    pub fn open_file(&mut self, path: &Path, ctx: &Context) -> Result<&mut FileView, Error> {
+    pub fn open_file(&mut self, path: &Path) -> Result<&mut FileView, Error> {
         let file = BinFile::from_path(path)?;
         self.config.files.push(path.into());
         self.config.changed = true;
 
-        let fv = FileView::new(ctx, file, self.next_hv_id);
+        let fv = FileView::new(file, self.next_hv_id);
         self.file_views.push(fv);
         self.next_hv_id += 1;
 
@@ -191,34 +191,44 @@ impl BdiffApp {
             for fv in self.file_views.iter_mut() {
                 // Keys
                 if ctx.input(|i| i.key_pressed(egui::Key::Home)) {
-                    fv.hv.set_cur_pos(0);
+                    fv.hv.set_cur_pos(&fv.file.data, 0);
                 }
                 if ctx.input(|i| i.key_pressed(egui::Key::End))
-                    && fv.file.data.len() >= fv.hv.bytes_per_screen()
+                    && fv.file.data.len() >= fv.hv.bytes_per_screen(&fv.file.data)
                 {
-                    fv.hv
-                        .set_cur_pos(fv.file.data.len() - fv.hv.bytes_per_screen())
+                    fv.hv.set_cur_pos(
+                        &fv.file.data,
+                        fv.file.data.len() - fv.hv.bytes_per_screen(&fv.file.data),
+                    )
                 }
                 if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
-                    fv.hv.adjust_cur_pos(-(fv.hv.bytes_per_screen() as isize))
+                    fv.hv.adjust_cur_pos(
+                        &fv.file.data,
+                        -(fv.hv.bytes_per_screen(&fv.file.data) as isize),
+                    )
                 }
                 if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
-                    fv.hv.adjust_cur_pos(fv.hv.bytes_per_screen() as isize)
+                    fv.hv.adjust_cur_pos(
+                        &fv.file.data,
+                        fv.hv.bytes_per_screen(&fv.file.data) as isize,
+                    )
                 }
                 if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
-                    fv.hv.adjust_cur_pos(-1)
+                    fv.hv.adjust_cur_pos(&fv.file.data, -1)
                 }
                 if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
-                    fv.hv.adjust_cur_pos(1)
+                    fv.hv.adjust_cur_pos(&fv.file.data, 1)
                 }
                 if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-                    fv.hv.adjust_cur_pos(-(fv.bytes_per_row as isize))
+                    fv.hv
+                        .adjust_cur_pos(&fv.file.data, -(fv.bytes_per_row as isize))
                 }
                 if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
-                    fv.hv.adjust_cur_pos(fv.bytes_per_row as isize)
+                    fv.hv
+                        .adjust_cur_pos(&fv.file.data, fv.bytes_per_row as isize)
                 }
                 if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    let last_byte = fv.cur_pos + fv.hv.bytes_per_screen();
+                    let last_byte = fv.cur_pos + fv.hv.bytes_per_screen(&fv.file.data);
 
                     if self.diff_state.enabled {
                         if last_byte < fv.file.data.len() {
@@ -226,13 +236,15 @@ impl BdiffApp {
                                 Some(next_diff) => {
                                     // Move to the next diff
                                     let new_pos = next_diff - (next_diff % fv.bytes_per_row);
-                                    fv.hv.set_cur_pos(new_pos);
+                                    fv.hv.set_cur_pos(&fv.file.data, new_pos);
                                 }
                                 None => {
                                     // Move to the end of the file
-                                    if fv.file.data.len() >= fv.hv.bytes_per_screen() {
+                                    if fv.file.data.len() >= fv.hv.bytes_per_screen(&fv.file.data) {
                                         fv.hv.set_cur_pos(
-                                            fv.file.data.len() - fv.hv.bytes_per_screen(),
+                                            &fv.file.data,
+                                            fv.file.data.len()
+                                                - fv.hv.bytes_per_screen(&fv.file.data),
                                         );
                                     }
                                 }
@@ -240,7 +252,10 @@ impl BdiffApp {
                         }
                     } else {
                         // Move one screen down
-                        fv.hv.adjust_cur_pos(fv.hv.bytes_per_screen() as isize)
+                        fv.hv.adjust_cur_pos(
+                            &fv.file.data,
+                            fv.hv.bytes_per_screen(&fv.file.data) as isize,
+                        )
                     }
                 }
 
@@ -264,8 +279,10 @@ impl BdiffApp {
                             self.scroll_overflow -= (scroll_amt * scroll_threshold) as f32;
                         }
                     }
-                    fv.hv
-                        .adjust_cur_pos(-scroll_amt * lines_per_scroll * fv.bytes_per_row as isize)
+                    fv.hv.adjust_cur_pos(
+                        &fv.file.data,
+                        -scroll_amt * lines_per_scroll * fv.bytes_per_row as isize,
+                    )
                 }
             }
 
@@ -458,12 +475,16 @@ impl eframe::App for BdiffApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let mut style: egui::Style = (*ctx.style()).clone();
         style.visuals.popup_shadow = Shadow {
-            extrusion: 0.0,
+            offset: Default::default(),
+            blur: 0.0,
             color: egui::Color32::TRANSPARENT,
+            spread: 0.0,
         };
         style.visuals.window_shadow = Shadow {
-            extrusion: 0.0,
+            offset: Default::default(),
+            blur: 0.0,
             color: egui::Color32::TRANSPARENT,
+            spread: 0.0,
         };
         style.visuals.menu_rounding = Rounding::default();
         style.visuals.window_rounding = Rounding::default();
@@ -514,7 +535,7 @@ impl eframe::App for BdiffApp {
         // Open dropped files
         if ctx.input(|i| !i.raw.dropped_files.is_empty()) {
             for file in ctx.input(|i| i.raw.dropped_files.clone()) {
-                let _ = self.open_file(&file.path.unwrap(), ctx);
+                let _ = self.open_file(&file.path.unwrap());
             }
         }
 
@@ -524,7 +545,7 @@ impl eframe::App for BdiffApp {
 
             for fv in self.file_views.iter() {
                 if self.last_selected_hv.is_some() && fv.id == self.last_selected_hv.unwrap() {
-                    let selected_bytes = fv.hv.get_selected_bytes();
+                    let selected_bytes = fv.hv.get_selected_bytes(&fv.file.data);
 
                     let selected_bytes: String = match fv.selection.side {
                         HexViewSelectionSide::Hex => selected_bytes
@@ -553,7 +574,7 @@ impl eframe::App for BdiffApp {
                 ui.menu_button("File", |ui| {
                     if ui.button("Open").clicked() {
                         if let Some(path) = rfd::FileDialog::new().pick_file() {
-                            let _ = self.open_file(&path, ctx);
+                            let _ = self.open_file(&path);
                         }
 
                         ui.close_menu();
@@ -770,7 +791,7 @@ impl BdiffApp {
                 match pos {
                     Some(pos) => {
                         for fv in self.file_views.iter_mut() {
-                            fv.hv.set_cur_pos(pos);
+                            fv.hv.set_cur_pos(&fv.file.data, pos);
                         }
                         goto_modal.close();
                     }
