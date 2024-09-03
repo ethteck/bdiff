@@ -20,7 +20,6 @@ use crate::{
 pub struct FileView {
     pub id: usize,
     pub file: BinFile,
-    pub num_rows: u32,
     pub bytes_per_row: usize,
     pub cur_pos: usize,
     pub pos_locked: bool,
@@ -37,15 +36,11 @@ pub struct FileView {
 
 impl FileView {
     pub fn new(file: BinFile, id: usize) -> Self {
-        let min_rows = 10;
-        let max_rows = 25;
         let default_bytes_per_row = 0x10;
-        let num_rows = (file.data.len() / default_bytes_per_row).clamp(min_rows, max_rows) as u32;
 
         Self {
             id,
             file,
-            num_rows,
             bytes_per_row: default_bytes_per_row,
             cur_pos: 0,
             pos_locked: false,
