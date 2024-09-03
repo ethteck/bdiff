@@ -106,7 +106,7 @@ impl DataViewer {
         &mut self,
         ui: &mut egui::Ui,
         hv_id: usize,
-        selected_bytes: Vec<u8>,
+        selected_bytes: &[u8],
         endianness: Endianness,
     ) {
         if !self.show {
@@ -150,7 +150,7 @@ impl DataViewer {
     fn display_data_types(
         &mut self,
         ui: &mut egui::Ui,
-        selected_bytes: Vec<u8>,
+        selected_bytes: &[u8],
         endianness: Endianness,
     ) {
         let mut float_buffer = dtoa::Buffer::new();
