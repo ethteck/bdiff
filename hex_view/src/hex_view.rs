@@ -1,4 +1,4 @@
-use crate::spacer::Spacer;
+use crate::{spacer::Spacer, DiffState};
 
 use egui::{self, Color32, FontId, Sense, Separator};
 use serde::{Deserialize, Serialize};
@@ -83,7 +83,7 @@ impl HexViewSelection {
     }
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Eq, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, Clone)]
 pub struct HexViewStyle {
     pub selection_color: Color32,
 
@@ -100,6 +100,8 @@ pub struct HexViewStyle {
     pub ascii_null_color: Color32,
     pub ascii_color: Color32,
     pub other_ascii_color: Color32,
+
+    pub font_size: f32,
 }
 
 impl Default for HexViewStyle {
@@ -116,6 +118,8 @@ impl Default for HexViewStyle {
             ascii_null_color: Color32::DARK_GRAY,
             ascii_color: Color32::LIGHT_GRAY,
             other_ascii_color: Color32::GRAY,
+
+            font_size: 14.0,
         }
     }
 }
@@ -125,7 +129,6 @@ pub struct HexView {
     pub style: HexViewStyle,
     pub bytes_per_row: usize,
     pub cur_pos: usize,
-    pub pos_locked: bool,
     pub selection: HexViewSelection,
     pub cursor_pos: Option<usize>,
 }
@@ -139,7 +142,6 @@ impl HexView {
             style: HexViewStyle::default(),
             bytes_per_row: default_bytes_per_row,
             cur_pos: 0,
-            pos_locked: false,
             selection: HexViewSelection::default(),
             cursor_pos: None,
         }
@@ -152,17 +154,11 @@ impl HexView {
     }
 
     pub fn set_cur_pos(&mut self, data: &[u8], val: usize) {
-        if self.pos_locked {
-            return;
-        }
         let last_line_start_address = (data.len() / self.bytes_per_row) * self.bytes_per_row;
         self.cur_pos = val.clamp(0, last_line_start_address);
     }
 
     pub fn adjust_cur_pos(&mut self, data: &[u8], delta: isize) {
-        if self.pos_locked {
-            return;
-        }
         let last_line_start_address = (data.len() / self.bytes_per_row) * self.bytes_per_row;
         self.cur_pos =
             (self.cur_pos as isize + delta).clamp(0, last_line_start_address as isize) as usize;
@@ -193,14 +189,181 @@ impl HexView {
         }
     }
 
+    fn show_offset(&mut self, data: &[u8], current_pos: usize, ui: &mut egui::Ui) {
+        let num_digits = match data.len() {
+            //0..=0xFFFF => 4,
+            0x10000..=0xFFFFFFFF => 8,
+            0x100000000..=0xFFFFFFFFFFFF => 12,
+            _ => 8,
+        };
+        let mut i: i32 = num_digits;
+        let mut offset_leading_zeros = true;
+
+        while i > 0 {
+            let digit = current_pos >> ((i - 1) * 4) & 0xF;
+
+            if offset_leading_zeros && digit > 0 {
+                offset_leading_zeros = false;
+            }
+
+            let offset_digit = egui::Label::new(
+                egui::RichText::new(format!("{:X}", digit))
+                    .font(FontId::monospace(self.style.font_size))
+                    .color({
+                        if offset_leading_zeros {
+                            self.style.offset_leading_zero_color
+                        } else {
+                            self.style.offset_text_color
+                        }
+                    }),
+            );
+
+            if i < num_digits && (i % 4) == 0 {
+                ui.add(Spacer::default().spacing_x(4.0));
+            }
+            ui.add(offset_digit);
+            i -= 1;
+        }
+    }
+
+    fn show_hex(
+        &mut self,
+        byte_grouping: usize,
+        ui: &mut egui::Ui,
+        current_pos: usize,
+        row: &[u8],
+        diff_state: Option<&DiffState>,
+        can_selection_change: bool,
+        cursor_state: CursorState,
+    ) {
+        let mut i = 0;
+        while i < self.bytes_per_row {
+            if i > 0 && (i % byte_grouping) == 0 {
+                ui.add(Spacer::default().spacing_x(4.0));
+            }
+            let row_current_pos = current_pos + i;
+
+            let byte: Option<u8> = row.get(i).copied();
+
+            let byte_text = match byte {
+                Some(byte) => format!("{:02X}", byte),
+                None => "  ".to_string(),
+            };
+
+            let hex_label = egui::Label::new(
+                egui::RichText::new(byte_text)
+                    .font(FontId::monospace(self.style.font_size))
+                    .color(
+                        if diff_state.is_some_and(|d| d.enabled && d.is_diff_at(row_current_pos)) {
+                            self.style.diff_color
+                        } else {
+                            match byte {
+                                Some(0) => self.style.hex_null_color,
+                                _ => self.style.other_hex_color,
+                            }
+                        },
+                    )
+                    .background_color({
+                        if self.selection.contains(row_current_pos) {
+                            self.style.selection_color
+                        } else {
+                            Color32::TRANSPARENT
+                        }
+                    }),
+            )
+            .sense(Sense::click_and_drag());
+
+            let res = ui.add(hex_label);
+
+            if byte.is_some() {
+                if res.contains_pointer() {
+                    self.cursor_pos = Some(row_current_pos);
+                }
+                if can_selection_change {
+                    self.handle_selection(
+                        ui,
+                        res,
+                        cursor_state,
+                        row_current_pos,
+                        HexViewSelectionSide::Hex,
+                    );
+                }
+            }
+            i += 1;
+
+            if i < self.bytes_per_row {
+                ui.add(Spacer::default().spacing_x(4.0));
+            }
+        }
+    }
+
+    fn show_ascii(
+        &mut self,
+        row: &[u8],
+        current_pos: usize,
+        ui: &mut egui::Ui,
+        can_selection_change: bool,
+        cursor_state: CursorState,
+    ) {
+        let mut i = 0;
+        while i < self.bytes_per_row {
+            let byte: Option<u8> = row.get(i).copied();
+
+            let row_current_pos = current_pos + i;
+
+            let ascii_char = match byte {
+                Some(32..=126) => byte.unwrap() as char,
+                Some(_) => '·',
+                None => ' ',
+            };
+
+            let hex_label = egui::Label::new(
+                egui::RichText::new(ascii_char)
+                    .font(FontId::monospace(self.style.font_size))
+                    .color(match byte {
+                        Some(0) => self.style.ascii_null_color,
+                        Some(32..=126) => self.style.ascii_color,
+                        _ => self.style.other_ascii_color,
+                    })
+                    .background_color({
+                        if self.selection.contains(row_current_pos) {
+                            self.style.selection_color
+                        } else {
+                            Color32::TRANSPARENT
+                        }
+                    }),
+            )
+            .sense(Sense::click_and_drag());
+
+            let res = ui.add(hex_label);
+            ui.add(Spacer::default().spacing_x(1.0));
+
+            if byte.is_some() {
+                if res.contains_pointer() {
+                    self.cursor_pos = Some(row_current_pos);
+                }
+                if can_selection_change {
+                    self.handle_selection(
+                        ui,
+                        res,
+                        cursor_state,
+                        row_current_pos,
+                        HexViewSelectionSide::Ascii,
+                    );
+                }
+            }
+            i += 1;
+        }
+    }
+
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
         data: &[u8],
         cursor_state: CursorState,
         can_selection_change: bool,
-        font_id: FontId,
         byte_grouping: usize,
+        diff_state: Option<&DiffState>,
     ) {
         let grid_rect = egui::Grid::new(format!("hex_grid{}", self.id))
             .striped(true)
@@ -218,161 +381,27 @@ impl HexView {
                 while r < num_rows {
                     let row: &[u8] = row_chunks.next().unwrap_or_default();
 
-                    let num_digits = match data.len() {
-                        //0..=0xFFFF => 4,
-                        0x10000..=0xFFFFFFFF => 8,
-                        0x100000000..=0xFFFFFFFFFFFF => 12,
-                        _ => 8,
-                    };
-                    let mut i = num_digits;
-                    let mut offset_leading_zeros = true;
-
-                    while i > 0 {
-                        let digit = current_pos >> ((i - 1) * 4) & 0xF;
-
-                        if offset_leading_zeros && digit > 0 {
-                            offset_leading_zeros = false;
-                        }
-
-                        let offset_digit = egui::Label::new(
-                            egui::RichText::new(format!("{:X}", digit))
-                                .font(font_id.clone())
-                                .color({
-                                    if offset_leading_zeros {
-                                        self.style.offset_leading_zero_color
-                                    } else {
-                                        self.style.offset_text_color
-                                    }
-                                }),
-                        );
-
-                        if i < num_digits && (i % 4) == 0 {
-                            ui.add(Spacer::default().spacing_x(4.0));
-                        }
-                        ui.add(offset_digit);
-                        i -= 1;
-                    }
+                    self.show_offset(data, current_pos, ui);
 
                     ui.add(Spacer::default().spacing_x(8.0));
                     ui.add(Separator::default().vertical().spacing(0.0));
                     ui.add(Spacer::default().spacing_x(8.0));
 
-                    // hex view
-                    let mut i = 0;
-                    while i < self.bytes_per_row {
-                        if i > 0 && (i % byte_grouping) == 0 {
-                            ui.add(Spacer::default().spacing_x(4.0));
-                        }
-                        let row_current_pos = current_pos + i;
-
-                        let byte: Option<u8> = row.get(i).copied();
-
-                        let byte_text = match byte {
-                            Some(byte) => format!("{:02X}", byte),
-                            None => "  ".to_string(),
-                        };
-
-                        let hex_label = egui::Label::new(
-                            egui::RichText::new(byte_text)
-                                .font(font_id.clone())
-                                .color(
-                                    // if diff_state.enabled
-                                    //     && diff_state.is_diff_at(row_current_pos)
-                                    // {
-                                    //     self.style.diff_color
-                                    // } else {
-                                    match byte {
-                                        Some(0) => self.style.hex_null_color,
-                                        _ => self.style.other_hex_color,
-                                    }, // },
-                                )
-                                .background_color({
-                                    if self.selection.contains(row_current_pos) {
-                                        self.style.selection_color
-                                    } else {
-                                        Color32::TRANSPARENT
-                                    }
-                                }),
-                        )
-                        .sense(Sense::click_and_drag());
-
-                        let res = ui.add(hex_label);
-
-                        if byte.is_some() {
-                            if res.contains_pointer() {
-                                self.cursor_pos = Some(row_current_pos);
-                            }
-                            if can_selection_change {
-                                self.handle_selection(
-                                    ui,
-                                    res,
-                                    cursor_state,
-                                    row_current_pos,
-                                    HexViewSelectionSide::Hex,
-                                );
-                            }
-                        }
-                        i += 1;
-
-                        if i < self.bytes_per_row {
-                            ui.add(Spacer::default().spacing_x(4.0));
-                        }
-                    }
+                    self.show_hex(
+                        byte_grouping,
+                        ui,
+                        current_pos,
+                        row,
+                        diff_state,
+                        can_selection_change,
+                        cursor_state,
+                    );
 
                     ui.add(Spacer::default().spacing_x(8.0));
                     ui.add(Separator::default().vertical().spacing(0.0));
                     ui.add(Spacer::default().spacing_x(8.0));
 
-                    // ascii view
-                    let mut i = 0;
-                    while i < self.bytes_per_row {
-                        let byte: Option<u8> = row.get(i).copied();
-
-                        let row_current_pos = current_pos + i;
-
-                        let ascii_char = match byte {
-                            Some(32..=126) => byte.unwrap() as char,
-                            Some(_) => '·',
-                            None => ' ',
-                        };
-
-                        let hex_label = egui::Label::new(
-                            egui::RichText::new(ascii_char)
-                                .font(font_id.clone())
-                                .color(match byte {
-                                    Some(0) => self.style.ascii_null_color,
-                                    Some(32..=126) => self.style.ascii_color,
-                                    _ => self.style.other_ascii_color,
-                                })
-                                .background_color({
-                                    if self.selection.contains(row_current_pos) {
-                                        self.style.selection_color
-                                    } else {
-                                        Color32::TRANSPARENT
-                                    }
-                                }),
-                        )
-                        .sense(Sense::click_and_drag());
-
-                        let res = ui.add(hex_label);
-                        ui.add(Spacer::default().spacing_x(1.0));
-
-                        if byte.is_some() {
-                            if res.contains_pointer() {
-                                self.cursor_pos = Some(row_current_pos);
-                            }
-                            if can_selection_change {
-                                self.handle_selection(
-                                    ui,
-                                    res,
-                                    cursor_state,
-                                    row_current_pos,
-                                    HexViewSelectionSide::Ascii,
-                                );
-                            }
-                        }
-                        i += 1;
-                    }
+                    self.show_ascii(row, current_pos, ui, can_selection_change, cursor_state);
 
                     current_pos += self.bytes_per_row;
                     r += 1;

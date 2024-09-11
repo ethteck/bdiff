@@ -7,12 +7,13 @@ use std::{
 use crate::{
     bin_file::BinFile,
     config::{read_json_config, write_json_config, Config, FileConfig},
-    diff_state::DiffState,
     file_view::FileView,
     settings::{read_json_settings, show_theme_settings, write_json_settings, Settings},
 };
 use anyhow::Error;
-use bdiff_hex_view::{CursorState, HexViewSelection, HexViewSelectionSide, HexViewSelectionState};
+use bdiff_hex_view::{
+    CursorState, DiffState, HexViewSelection, HexViewSelectionSide, HexViewSelectionState,
+};
 use eframe::egui::{Align, Layout, Modifiers, RichText, Ui};
 use eframe::{
     egui::{self, Checkbox, Context, Style, ViewportCommand},
@@ -47,6 +48,7 @@ impl Default for Options {
 pub struct BdiffApp {
     next_hv_id: usize,
     file_views: Vec<FileView>,
+    global_view_pos: usize,
     goto_modal: GotoModal,
     overwrite_modal: OverwriteModal,
     scroll_overflow: f32,
@@ -141,165 +143,172 @@ impl BdiffApp {
         self.file_views.iter_mut().find(|fv| fv.id == id)
     }
 
-    fn handle_hex_view_input(&mut self, ctx: &Context) {
-        if ctx.input(|i| i.modifiers.shift) {
-            // Move selection
-            if let Some(fv) = self.last_selected_hv {
-                if let Some(fv) = self.get_hex_view_by_id(fv) {
-                    let mut changed = false;
-                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft))
-                        && fv.hv.selection.start() > 0
-                        && fv.hv.selection.end() > 0
-                    {
-                        fv.hv.selection.adjust_cur_pos(-1);
-                        changed = true;
-                    }
-                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight))
-                        && fv.hv.selection.start() < fv.file.data.len() - 1
-                        && fv.hv.selection.end() < fv.file.data.len() - 1
-                    {
-                        fv.hv.selection.adjust_cur_pos(1);
-                        changed = true;
-                    }
-                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp))
-                        && fv.hv.selection.start() >= fv.bytes_per_row
-                        && fv.hv.selection.end() >= fv.bytes_per_row
-                    {
-                        fv.hv.selection.adjust_cur_pos(-(fv.bytes_per_row as isize));
-                        changed = true;
-                    }
-                    if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown))
-                        && fv.hv.selection.start() < fv.file.data.len() - fv.bytes_per_row
-                        && fv.hv.selection.end() < fv.file.data.len() - fv.bytes_per_row
-                    {
-                        fv.hv.selection.adjust_cur_pos(fv.bytes_per_row as isize);
-                        changed = true;
-                    }
+    fn move_selection(&mut self, ctx: &Context) {
+        if let Some(fv) = self.last_selected_hv {
+            if let Some(fv) = self.get_hex_view_by_id(fv) {
+                let mut changed = false;
+                if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft))
+                    && fv.hv.selection.start() > 0
+                    && fv.hv.selection.end() > 0
+                {
+                    fv.hv.selection.adjust_cur_pos(-1);
+                    changed = true;
+                }
+                if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight))
+                    && fv.hv.selection.start() < fv.file.data.len() - 1
+                    && fv.hv.selection.end() < fv.file.data.len() - 1
+                {
+                    fv.hv.selection.adjust_cur_pos(1);
+                    changed = true;
+                }
+                if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp))
+                    && fv.hv.selection.start() >= fv.bytes_per_row
+                    && fv.hv.selection.end() >= fv.bytes_per_row
+                {
+                    fv.hv.selection.adjust_cur_pos(-(fv.bytes_per_row as isize));
+                    changed = true;
+                }
+                if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown))
+                    && fv.hv.selection.start() < fv.file.data.len() - fv.bytes_per_row
+                    && fv.hv.selection.end() < fv.file.data.len() - fv.bytes_per_row
+                {
+                    fv.hv.selection.adjust_cur_pos(fv.bytes_per_row as isize);
+                    changed = true;
+                }
 
-                    if changed {
-                        self.global_selection = fv.hv.selection.clone();
-                    }
+                if changed {
+                    self.global_selection = fv.hv.selection.clone();
                 }
             }
-        } else {
-            // Move view
-            let prev_positions: Vec<usize> = self
-                .file_views
-                .iter()
-                .map(|fv| fv.cur_pos)
-                .collect::<Vec<usize>>();
+        }
+    }
 
-            let diffing = self.file_views.len() > 1 && self.diff_state.enabled;
+    fn move_view(&mut self, ctx: &Context) {
+        let prev_positions: Vec<usize> = self
+            .file_views
+            .iter()
+            .map(|fv| fv.cur_pos)
+            .collect::<Vec<usize>>();
 
-            for fv in self.file_views.iter_mut() {
-                // Keys
-                if ctx.input(|i| i.key_pressed(egui::Key::Home)) {
-                    fv.hv.set_cur_pos(&fv.file.data, 0);
-                }
-                if ctx.input(|i| i.key_pressed(egui::Key::End))
-                    && fv.file.data.len() >= fv.hv.bytes_per_screen(&fv.file.data)
-                {
-                    fv.hv.set_cur_pos(
-                        &fv.file.data,
-                        fv.file.data.len() - fv.hv.bytes_per_screen(&fv.file.data),
-                    )
-                }
-                if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
-                    fv.hv.adjust_cur_pos(
-                        &fv.file.data,
-                        -(fv.hv.bytes_per_screen(&fv.file.data) as isize),
-                    )
-                }
-                if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
+        let diffing = self.file_views.len() > 1 && self.diff_state.enabled;
+
+        for fv in self.file_views.iter_mut().filter(|fv| !fv.pos_locked) {
+            // Keys
+            if ctx.input(|i| i.key_pressed(egui::Key::Home)) {
+                fv.hv.set_cur_pos(&fv.file.data, 0);
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::End))
+                && fv.file.data.len() >= fv.hv.bytes_per_screen(&fv.file.data)
+            {
+                fv.hv.set_cur_pos(
+                    &fv.file.data,
+                    fv.file.data.len() - fv.hv.bytes_per_screen(&fv.file.data),
+                )
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
+                fv.hv.adjust_cur_pos(
+                    &fv.file.data,
+                    -(fv.hv.bytes_per_screen(&fv.file.data) as isize),
+                )
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
+                fv.hv.adjust_cur_pos(
+                    &fv.file.data,
+                    fv.hv.bytes_per_screen(&fv.file.data) as isize,
+                )
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
+                fv.hv.adjust_cur_pos(&fv.file.data, -1)
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
+                fv.hv.adjust_cur_pos(&fv.file.data, 1)
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+                fv.hv
+                    .adjust_cur_pos(&fv.file.data, -(fv.bytes_per_row as isize))
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+                fv.hv
+                    .adjust_cur_pos(&fv.file.data, fv.bytes_per_row as isize)
+            }
+            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+                if diffing {
+                    let last_byte = fv.cur_pos + fv.hv.bytes_per_screen(&fv.file.data);
+
+                    if last_byte < fv.file.data.len() {
+                        match self.diff_state.get_next_diff(last_byte) {
+                            Some(next_diff) => {
+                                // Move to the next diff
+                                let new_pos = next_diff - (next_diff % fv.bytes_per_row);
+                                fv.hv.set_cur_pos(&fv.file.data, new_pos);
+                            }
+                            None => {
+                                // Move to the end of the file
+                                if fv.file.data.len() >= fv.hv.bytes_per_screen(&fv.file.data) {
+                                    fv.hv.set_cur_pos(
+                                        &fv.file.data,
+                                        fv.file.data.len() - fv.hv.bytes_per_screen(&fv.file.data),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Move one screen down
                     fv.hv.adjust_cur_pos(
                         &fv.file.data,
                         fv.hv.bytes_per_screen(&fv.file.data) as isize,
                     )
                 }
-                if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
-                    fv.hv.adjust_cur_pos(&fv.file.data, -1)
-                }
-                if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
-                    fv.hv.adjust_cur_pos(&fv.file.data, 1)
-                }
-                if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-                    fv.hv
-                        .adjust_cur_pos(&fv.file.data, -(fv.bytes_per_row as isize))
-                }
-                if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
-                    fv.hv
-                        .adjust_cur_pos(&fv.file.data, fv.bytes_per_row as isize)
-                }
-                if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    let last_byte = fv.cur_pos + fv.hv.bytes_per_screen(&fv.file.data);
-
-                    if diffing {
-                        if last_byte < fv.file.data.len() {
-                            match self.diff_state.get_next_diff(last_byte) {
-                                Some(next_diff) => {
-                                    // Move to the next diff
-                                    let new_pos = next_diff - (next_diff % fv.bytes_per_row);
-                                    fv.hv.set_cur_pos(&fv.file.data, new_pos);
-                                }
-                                None => {
-                                    // Move to the end of the file
-                                    if fv.file.data.len() >= fv.hv.bytes_per_screen(&fv.file.data) {
-                                        fv.hv.set_cur_pos(
-                                            &fv.file.data,
-                                            fv.file.data.len()
-                                                - fv.hv.bytes_per_screen(&fv.file.data),
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        // Move one screen down
-                        fv.hv.adjust_cur_pos(
-                            &fv.file.data,
-                            fv.hv.bytes_per_screen(&fv.file.data) as isize,
-                        )
-                    }
-                }
-
-                let scroll_y = ctx.input(|i| i.raw_scroll_delta.y);
-
-                // Scrolling
-                if scroll_y != 0.0 {
-                    let lines_per_scroll = 1;
-                    let scroll_threshold = 20; // One tick of the scroll wheel for me
-                    let scroll_amt: isize;
-
-                    if scroll_y.abs() >= scroll_threshold as f32 {
-                        // Scroll wheels / very fast scrolling
-                        scroll_amt = scroll_y as isize / scroll_threshold;
-                        self.scroll_overflow = 0.0;
-                    } else {
-                        // Trackpads - Accumulate scroll amount until it reaches the threshold
-                        self.scroll_overflow += scroll_y;
-                        scroll_amt = self.scroll_overflow as isize / scroll_threshold;
-                        if scroll_amt != 0 {
-                            self.scroll_overflow -= (scroll_amt * scroll_threshold) as f32;
-                        }
-                    }
-                    fv.hv.adjust_cur_pos(
-                        &fv.file.data,
-                        -scroll_amt * lines_per_scroll * fv.bytes_per_row as isize,
-                    )
-                }
             }
 
-            // If any of the current positions are different from the previous ones
-            let has_new_positions = self
-                .file_views
-                .iter()
-                .zip(prev_positions.iter())
-                .any(|(fv, &prev_pos)| fv.cur_pos != prev_pos);
+            let scroll_y = ctx.input(|i| i.raw_scroll_delta.y);
 
-            // and if any hex views are also locked, we need to recalculate the diff
-            if has_new_positions && self.file_views.iter().any(|fv| fv.pos_locked) {
-                self.recalculate_diffs()
+            // Scrolling
+            if scroll_y != 0.0 {
+                let lines_per_scroll = 1;
+                let scroll_threshold = 20; // One tick of the scroll wheel for me
+                let scroll_amt: isize;
+
+                if scroll_y.abs() >= scroll_threshold as f32 {
+                    // Scroll wheels / very fast scrolling
+                    scroll_amt = scroll_y as isize / scroll_threshold;
+                    self.scroll_overflow = 0.0;
+                } else {
+                    // Trackpads - Accumulate scroll amount until it reaches the threshold
+                    self.scroll_overflow += scroll_y;
+                    scroll_amt = self.scroll_overflow as isize / scroll_threshold;
+                    if scroll_amt != 0 {
+                        self.scroll_overflow -= (scroll_amt * scroll_threshold) as f32;
+                    }
+                }
+                fv.hv.adjust_cur_pos(
+                    &fv.file.data,
+                    -scroll_amt * lines_per_scroll * fv.bytes_per_row as isize,
+                )
             }
+        }
+
+        // If any of the current positions are different from the previous ones
+        let has_new_positions = self
+            .file_views
+            .iter()
+            .zip(prev_positions.iter())
+            .any(|(fv, &prev_pos)| fv.cur_pos != prev_pos);
+
+        // and if any hex views are also locked, we need to recalculate the diff
+        if has_new_positions && self.file_views.iter().any(|fv| fv.pos_locked) {
+            self.recalculate_diffs()
+        }
+    }
+
+    fn handle_hex_view_input(&mut self, ctx: &Context) {
+        if ctx.input(|i| i.modifiers.shift) {
+            // Move selection
+            self.move_selection(ctx);
+        } else {
+            // Move view
+            self.move_view(ctx);
         }
     }
 }
@@ -481,19 +490,19 @@ impl eframe::App for BdiffApp {
                         "Mirror selection across files",
                     );
 
-                    ui.label("Diff View");
+                    ui.label("File View");
 
                     settings::byte_grouping_slider(ui, &mut self.settings.byte_grouping);
+
+                    ui.add_enabled(self.file_views.len() > 1, mirror_selection_checkbox);
 
                     if ui
                         .add_enabled(self.file_views.len() > 1, diff_checkbox)
                         .clicked()
                         && self.diff_state.enabled
                     {
-                        //self.recalculate_diffs()
+                        self.recalculate_diffs()
                     }
-
-                    ui.add_enabled(self.file_views.len() > 1, mirror_selection_checkbox);
 
                     ui.separator();
                     ui.label("General Interface");

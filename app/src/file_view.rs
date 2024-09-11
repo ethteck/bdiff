@@ -1,6 +1,5 @@
 use anyhow::Error;
-use bdiff_hex_view::{CursorState, HexView, HexViewSelectionState};
-use eframe::egui::FontId;
+use bdiff_hex_view::{CursorState, DiffState, HexView, HexViewSelectionState};
 use eframe::{
     egui::{self, Id},
     epaint::Color32,
@@ -11,7 +10,6 @@ use crate::{
     bin_file::{read_file_bytes, Endianness},
     config::Config,
     data_viewer::DataViewer,
-    diff_state::DiffState,
     map_tool::MapTool,
     settings::Settings,
     string_viewer::StringViewer,
@@ -72,13 +70,11 @@ impl FileView {
         &mut self,
         config: &mut Config,
         settings: &Settings,
-        _diff_state: &DiffState,
+        diff_state: &DiffState,
         ctx: &egui::Context,
         cursor_state: CursorState,
         can_selection_change: bool,
     ) {
-        let font_size = 14.0;
-
         egui::Window::new(self.file.path.to_str().unwrap())
             .id(Id::new(format!("hex_view_window_{}", self.id)))
             .title_bar(false)
@@ -91,7 +87,7 @@ impl FileView {
                         ui.label(
                             egui::RichText::new(file_name)
                                 .monospace()
-                                .size(font_size)
+                                .size(14.0)
                                 .color(Color32::LIGHT_GRAY),
                         );
 
@@ -164,8 +160,8 @@ impl FileView {
                                     &self.file.data,
                                     cursor_state,
                                     can_selection_change,
-                                    FontId::monospace(font_size),
                                     settings.byte_grouping.into(),
+                                    Some(diff_state),
                                 );
                             });
 
