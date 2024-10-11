@@ -162,17 +162,19 @@ impl BdiffApp {
                     changed = true;
                 }
                 if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp))
-                    && fv.hv.selection.start() >= fv.bytes_per_row
-                    && fv.hv.selection.end() >= fv.bytes_per_row
+                    && fv.hv.selection.start() >= fv.hv.bytes_per_row
+                    && fv.hv.selection.end() >= fv.hv.bytes_per_row
                 {
-                    fv.hv.selection.adjust_cur_pos(-(fv.bytes_per_row as isize));
+                    fv.hv
+                        .selection
+                        .adjust_cur_pos(-(fv.hv.bytes_per_row as isize));
                     changed = true;
                 }
                 if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown))
-                    && fv.hv.selection.start() < fv.file.data.len() - fv.bytes_per_row
-                    && fv.hv.selection.end() < fv.file.data.len() - fv.bytes_per_row
+                    && fv.hv.selection.start() < fv.file.data.len() - fv.hv.bytes_per_row
+                    && fv.hv.selection.end() < fv.file.data.len() - fv.hv.bytes_per_row
                 {
-                    fv.hv.selection.adjust_cur_pos(fv.bytes_per_row as isize);
+                    fv.hv.selection.adjust_cur_pos(fv.hv.bytes_per_row as isize);
                     changed = true;
                 }
 
@@ -184,11 +186,11 @@ impl BdiffApp {
     }
 
     fn move_view(&mut self, ctx: &Context) {
-        let prev_positions: Vec<usize> = self
+        let prev_positions: Vec<isize> = self
             .file_views
             .iter()
-            .map(|fv| fv.cur_pos)
-            .collect::<Vec<usize>>();
+            .map(|fv| fv.hv.cur_pos)
+            .collect::<Vec<isize>>();
 
         let diffing = self.file_views.len() > 1 && self.diff_state.enabled;
 
@@ -202,7 +204,7 @@ impl BdiffApp {
             {
                 fv.hv.set_cur_pos(
                     &fv.file.data,
-                    fv.file.data.len() - fv.hv.bytes_per_screen(&fv.file.data),
+                    fv.file.data.len() as isize - fv.hv.bytes_per_screen(&fv.file.data) as isize,
                 )
             }
             if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
@@ -225,30 +227,35 @@ impl BdiffApp {
             }
             if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
                 fv.hv
-                    .adjust_cur_pos(&fv.file.data, -(fv.bytes_per_row as isize))
+                    .adjust_cur_pos(&fv.file.data, -(fv.hv.bytes_per_row as isize))
             }
             if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
                 fv.hv
-                    .adjust_cur_pos(&fv.file.data, fv.bytes_per_row as isize)
+                    .adjust_cur_pos(&fv.file.data, fv.hv.bytes_per_row as isize)
             }
             if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                 if diffing {
-                    let last_byte = fv.cur_pos + fv.hv.bytes_per_screen(&fv.file.data);
+                    let last_byte = fv.hv.cur_pos + fv.hv.bytes_per_screen(&fv.file.data) as isize;
 
-                    if last_byte < fv.file.data.len() {
-                        match self.diff_state.get_next_diff(last_byte) {
-                            Some(next_diff) => {
-                                // Move to the next diff
-                                let new_pos = next_diff - (next_diff % fv.bytes_per_row);
-                                fv.hv.set_cur_pos(&fv.file.data, new_pos);
-                            }
-                            None => {
-                                // Move to the end of the file
-                                if fv.file.data.len() >= fv.hv.bytes_per_screen(&fv.file.data) {
-                                    fv.hv.set_cur_pos(
-                                        &fv.file.data,
-                                        fv.file.data.len() - fv.hv.bytes_per_screen(&fv.file.data),
-                                    );
+                    if last_byte >= 0 {
+                        let last_byte = last_byte as usize;
+
+                        if last_byte < fv.file.data.len() {
+                            match self.diff_state.get_next_diff(last_byte) {
+                                Some(next_diff) => {
+                                    // Move to the next diff
+                                    let new_pos = next_diff - (next_diff % fv.hv.bytes_per_row);
+                                    fv.hv.set_cur_pos(&fv.file.data, new_pos as isize);
+                                }
+                                None => {
+                                    // Move to the end of the file
+                                    if fv.file.data.len() >= fv.hv.bytes_per_screen(&fv.file.data) {
+                                        fv.hv.set_cur_pos(
+                                            &fv.file.data,
+                                            fv.file.data.len() as isize
+                                                - fv.hv.bytes_per_screen(&fv.file.data) as isize,
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -284,8 +291,23 @@ impl BdiffApp {
                 }
                 fv.hv.adjust_cur_pos(
                     &fv.file.data,
-                    -scroll_amt * lines_per_scroll * fv.bytes_per_row as isize,
+                    -scroll_amt * lines_per_scroll * fv.hv.bytes_per_row as isize,
                 )
+            }
+        }
+
+        let mut shared_negative = isize::MIN;
+        for fv in self.file_views.iter_mut() {
+            shared_negative = shared_negative.max(fv.hv.cur_pos);
+        }
+
+        // Don't allow views to endlessly become negative
+        if shared_negative < 0 {
+            let shared_negative: usize = shared_negative.abs() as usize;
+
+            for fv in self.file_views.iter_mut().filter(|fv| !fv.pos_locked) {
+                let amt_to_correct = (shared_negative / fv.hv.bytes_per_row) * fv.hv.bytes_per_row;
+                fv.hv.cur_pos += amt_to_correct as isize;
             }
         }
 
@@ -294,7 +316,7 @@ impl BdiffApp {
             .file_views
             .iter()
             .zip(prev_positions.iter())
-            .any(|(fv, &prev_pos)| fv.cur_pos != prev_pos);
+            .any(|(fv, &prev_pos)| fv.hv.cur_pos != prev_pos);
 
         // and if any hex views are also locked, we need to recalculate the diff
         if has_new_positions && self.file_views.iter().any(|fv| fv.pos_locked) {
@@ -636,7 +658,13 @@ impl eframe::App for BdiffApp {
         }
 
         if self.settings.theme_menu_open {
+            let cur_theme = self.settings.theme_settings.clone();
             show_theme_settings(ctx, &mut self.settings);
+            if cur_theme != self.settings.theme_settings {
+                for fv in self.file_views.iter_mut() {
+                    fv.hv.style = self.settings.theme_settings.hex_view_style.clone();
+                }
+            }
         }
     }
 }
@@ -654,7 +682,7 @@ impl BdiffApp {
     fn show_overwrite_modal(&mut self, modal: &Modal) {
         modal.show(|ui| {
             modal.title(ui, "Overwrite previous config");
-            ui.label(&format!(
+            ui.label(format!(
                 "By saving, you are going to overwrite existing configuration file at \"{}\".",
                 "./bdiff.json"
             ));
@@ -692,7 +720,7 @@ impl BdiffApp {
                 match pos {
                     Some(pos) => {
                         for fv in self.file_views.iter_mut() {
-                            fv.hv.set_cur_pos(&fv.file.data, pos);
+                            fv.hv.set_cur_pos(&fv.file.data, pos as isize);
                         }
                         goto_modal.close();
                     }

@@ -6,9 +6,9 @@ mod config;
 mod data_viewer;
 mod file_view;
 mod map_file;
-mod map_tool;
 mod settings;
 mod string_viewer;
+mod symbol_tool;
 mod watcher;
 
 use std::path::PathBuf;

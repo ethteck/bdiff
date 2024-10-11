@@ -1,7 +1,8 @@
 use crate::settings::panels::{color_selection, window_bottom_commands};
 use crate::settings::Settings;
-use eframe::egui;
-use eframe::egui::{Align, Color32, Layout, RichText};
+use bdiff_hex_view::HexViewStyle;
+use eframe::egui::{self, Color32};
+use eframe::egui::{Align, Layout, RichText};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
@@ -24,85 +25,44 @@ impl Display for VisualTheme {
     }
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, PartialOrd, Clone)]
 pub struct ThemeSettings {
     pub active_theme: VisualTheme,
-
-    // Offset colors
-    pub offset_text_color: Color,
-    pub offset_leading_zero_color: Color,
-
-    // Hex View colors
-    pub selection_color: Color,
-    pub diff_color: Color,
-    pub hex_null_color: Color,
-    pub other_hex_color: Color,
-
-    // ASCII View colors
-    pub ascii_null_color: Color,
-    pub ascii_color: Color,
-    pub other_ascii_color: Color,
+    pub hex_view_style: HexViewStyle,
 }
 
 impl Default for ThemeSettings {
     fn default() -> Self {
         Self {
             active_theme: VisualTheme::Decompme,
-
-            // Offset colors
-            offset_text_color: Color32::GRAY.into(),
-            offset_leading_zero_color: Color32::DARK_GRAY.into(),
-
-            // Hex View colors
-            selection_color: Color32::DARK_GREEN.into(),
-            diff_color: Color32::RED.into(),
-            hex_null_color: Color32::DARK_GRAY.into(),
-            other_hex_color: Color32::GRAY.into(),
-
-            // ASCII View colors
-            ascii_null_color: Color32::DARK_GRAY.into(),
-            ascii_color: Color32::LIGHT_GRAY.into(),
-            other_ascii_color: Color32::GRAY.into(),
+            hex_view_style: HexViewStyle::default(),
         }
     }
 }
-
-#[derive(Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord, Clone)]
-pub struct Color(pub [u8; 4]);
-
-impl Color {
-    pub fn as_bytes(&self) -> &[u8; 4] {
-        &self.0
-    }
-
-    pub fn as_bytes_mut(&mut self) -> &mut [u8; 4] {
-        &mut self.0
-    }
-}
-
-impl From<Color32> for Color {
-    fn from(value: Color32) -> Self {
-        Self(value.to_array())
-    }
-}
-
-impl From<Color> for Color32 {
-    fn from(value: Color) -> Self {
-        let sc = value.0;
-        Color32::from_rgba_premultiplied(sc[0], sc[1], sc[2], sc[3])
-    }
-}
-
 pub fn show_theme_settings(ctx: &egui::Context, settings: &mut Settings) {
     egui::Window::new("Theme Settings")
-        .default_open(true)
+        .title_bar(false)
         .fixed_size((365.0, 0.0))
         .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new("Theme Settings")
+                        .size(16.0)
+                        .color(Color32::LIGHT_GRAY),
+                );
+
+                if ui.button("X").on_hover_text("Close").clicked() {
+                    settings.theme_menu_open = false;
+                }
+            });
+
             ui.horizontal(|ui| {
                 // Font Colors
                 egui::Frame::group(ui.style()).show(ui, |ui| {
                     ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
-                        ui.add(egui::Label::new(RichText::new("Font Colors").heading()));
+                        ui.add(egui::Label::new(
+                            RichText::new("Hex View Colors").size(15.0),
+                        ));
 
                         egui::CollapsingHeader::new("Offset Colors")
                             .default_open(true)
@@ -110,13 +70,16 @@ pub fn show_theme_settings(ctx: &egui::Context, settings: &mut Settings) {
                                 color_selection(
                                     ui,
                                     "Offset text color",
-                                    &mut settings.theme_settings.offset_text_color,
+                                    &mut settings.theme_settings.hex_view_style.offset_text_color,
                                 );
 
                                 color_selection(
                                     ui,
                                     "Leading zero color",
-                                    &mut settings.theme_settings.offset_leading_zero_color,
+                                    &mut settings
+                                        .theme_settings
+                                        .hex_view_style
+                                        .offset_leading_zero_color,
                                 );
                             });
 
@@ -126,22 +89,22 @@ pub fn show_theme_settings(ctx: &egui::Context, settings: &mut Settings) {
                                 color_selection(
                                     ui,
                                     "Selection color",
-                                    &mut settings.theme_settings.selection_color,
+                                    &mut settings.theme_settings.hex_view_style.selection_color,
                                 );
                                 color_selection(
                                     ui,
                                     "Diff color",
-                                    &mut settings.theme_settings.diff_color,
+                                    &mut settings.theme_settings.hex_view_style.diff_color,
                                 );
                                 color_selection(
                                     ui,
                                     "Null color",
-                                    &mut settings.theme_settings.hex_null_color,
+                                    &mut settings.theme_settings.hex_view_style.hex_null_color,
                                 );
                                 color_selection(
                                     ui,
                                     "Other color",
-                                    &mut settings.theme_settings.other_hex_color,
+                                    &mut settings.theme_settings.hex_view_style.other_hex_color,
                                 );
                             });
 
@@ -151,19 +114,19 @@ pub fn show_theme_settings(ctx: &egui::Context, settings: &mut Settings) {
                                 color_selection(
                                     ui,
                                     "Null color",
-                                    &mut settings.theme_settings.ascii_null_color,
+                                    &mut settings.theme_settings.hex_view_style.ascii_null_color,
                                 );
 
                                 color_selection(
                                     ui,
                                     "Ascii color",
-                                    &mut settings.theme_settings.ascii_color,
+                                    &mut settings.theme_settings.hex_view_style.ascii_color,
                                 );
 
                                 color_selection(
                                     ui,
                                     "Other color",
-                                    &mut settings.theme_settings.other_ascii_color,
+                                    &mut settings.theme_settings.hex_view_style.other_ascii_color,
                                 );
                             });
                     });

@@ -10,42 +10,36 @@ use crate::{
     bin_file::{read_file_bytes, Endianness},
     config::Config,
     data_viewer::DataViewer,
-    map_tool::MapTool,
     settings::Settings,
     string_viewer::StringViewer,
+    symbol_tool::SymbolTool,
 };
 
 pub struct FileView {
     pub id: usize,
     pub file: BinFile,
-    pub bytes_per_row: usize,
-    pub cur_pos: usize,
     pub pos_locked: bool,
     pub show_selection_info: bool,
     pub show_cursor_info: bool,
     pub hv: HexView,
     sv: StringViewer,
     dv: DataViewer,
-    pub mt: MapTool,
+    pub mt: SymbolTool,
     pub closed: bool,
 }
 
 impl FileView {
     pub fn new(file: BinFile, id: usize) -> Self {
-        let default_bytes_per_row = 0x10;
-
         Self {
             id,
             file,
-            bytes_per_row: default_bytes_per_row,
-            cur_pos: 0,
             pos_locked: false,
             show_selection_info: true,
             show_cursor_info: true,
             hv: HexView::new(id),
             sv: StringViewer::default(),
             dv: DataViewer::default(),
-            mt: MapTool::default(),
+            mt: SymbolTool::default(),
             closed: false,
         }
     }
@@ -79,17 +73,24 @@ impl FileView {
             .id(Id::new(format!("hex_view_window_{}", self.id)))
             .title_bar(false)
             .show(ctx, |ui| {
-                let file_name = self.file.path.as_path().to_str().unwrap();
-
                 ui.with_layout(
                     egui::Layout::left_to_right(eframe::emath::Align::Min),
                     |ui| {
+                        // Truncate file_name with leading ellipsis
+                        let name_limit = 50;
+                        let file_name = self.file.path.as_path().to_str().unwrap();
+                        let file_name_brief = if file_name.len() > name_limit {
+                            format!("...{}", &file_name[file_name.len() - name_limit - 3..])
+                        } else {
+                            file_name.to_owned()
+                        };
                         ui.label(
-                            egui::RichText::new(file_name)
+                            egui::RichText::new(file_name_brief)
                                 .monospace()
                                 .size(14.0)
                                 .color(Color32::LIGHT_GRAY),
-                        );
+                        )
+                        .on_hover_text(egui::RichText::new(file_name));
 
                         let (lock_text, hover_text) = match self.pos_locked {
                             true => (
@@ -133,7 +134,7 @@ impl FileView {
                             ui.checkbox(&mut self.show_cursor_info, "Cursor info");
                             ui.checkbox(&mut self.dv.show, "Data viewer");
                             ui.checkbox(&mut self.sv.show, "String viewer");
-                            ui.checkbox(&mut self.mt.show, "Map tool");
+                            ui.checkbox(&mut self.mt.show, "Symbols");
                         });
 
                         if ui.button("X").on_hover_text("Close").clicked() {
@@ -211,6 +212,12 @@ impl FileView {
                             if self.show_cursor_info {
                                 let hover_text = match self.hv.cursor_pos {
                                     Some(pos) => {
+                                        if pos < 0 || pos >= self.file.data.len() as isize {
+                                            return;
+                                        }
+
+                                        let pos = pos as usize;
+
                                         let map_entry = match self.mt.map_file {
                                             Some(ref map_file) => map_file.get_entry(pos, pos + 1),
                                             None => None,

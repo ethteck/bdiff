@@ -14,10 +14,12 @@ impl Default for DiffState {
 }
 
 impl DiffState {
-    pub fn is_diff_at(&self, index: usize) -> bool {
-        if !self.enabled {
+    pub fn is_diff_at(&self, index: isize) -> bool {
+        if index < 0 || !self.enabled {
             return false;
         }
+
+        let index = index as usize;
 
         if index >= self.diffs.len() {
             return false;

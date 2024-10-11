@@ -3,13 +3,13 @@ use anyhow::Error;
 use eframe::egui;
 
 #[derive(Default)]
-pub struct MapTool {
+pub struct SymbolTool {
     pub show: bool,
     pub last_status: Option<Error>,
     pub map_file: Option<MapFile>,
 }
 
-impl MapTool {
+impl SymbolTool {
     pub fn display(&mut self, ui: &mut egui::Ui) {
         if !self.show {
             return;
@@ -17,9 +17,7 @@ impl MapTool {
 
         ui.group(|ui| {
             ui.with_layout(egui::Layout::top_down(eframe::emath::Align::Min), |ui| {
-                ui.add(egui::Label::new(
-                    egui::RichText::new("Map File").monospace(),
-                ));
+                ui.add(egui::Label::new(egui::RichText::new("Symbols").monospace()));
 
                 ui.label(match self.map_file {
                     Some(ref map_file) => format!(
@@ -33,7 +31,7 @@ impl MapTool {
                             .unwrap(),
                         map_file.data.len()
                     ),
-                    None => "No map file loaded".to_owned(),
+                    None => "No .map or elf file loaded".to_owned(),
                 });
 
                 ui.with_layout(
@@ -60,7 +58,7 @@ impl MapTool {
         });
     }
 
-    pub fn load_file(&mut self, path: &std::path::Path) {
+    fn load_map_file(&mut self, path: &std::path::Path) {
         let mf = MapFile::from_path(path.to_owned());
 
         match mf {
@@ -70,6 +68,26 @@ impl MapTool {
             Err(e) => {
                 self.map_file = None;
                 self.last_status = Some(e);
+            }
+        }
+    }
+
+    fn load_elf_file(&mut self, path: &std::path::Path) {
+        self.map_file = None;
+        // TODO
+    }
+
+    pub fn load_file(&mut self, path: &std::path::Path) {
+        match path.extension() {
+            Some(ext) => {
+                if ext == "map" {
+                    self.load_map_file(path);
+                } else {
+                    self.load_elf_file(path);
+                }
+            }
+            None => {
+                self.load_elf_file(path);
             }
         }
     }

@@ -14,7 +14,7 @@ pub mod theme;
 pub use byte_grouping::byte_grouping_slider;
 pub use theme::show_theme_settings;
 
-#[derive(Deserialize, Serialize, Default, PartialEq, Eq, PartialOrd, Ord, Clone)]
+#[derive(Deserialize, Serialize, Default, PartialEq, PartialOrd, Clone)]
 pub struct Settings {
     pub byte_grouping: ByteGrouping,
     pub theme_settings: ThemeSettings,
@@ -25,20 +25,21 @@ pub struct Settings {
 
 impl SettingsControl for Settings {
     fn restore_defaults(&mut self) {
+        let prev_theme_menu_open = self.theme_menu_open;
         *self = Settings::default();
-        self.save();
+        // todo dumb hack because the state of the window being open is part of the struct
+        self.theme_menu_open = prev_theme_menu_open;
     }
 
     fn reload(&mut self) {
+        let prev_theme_menu_open = self.theme_menu_open;
         *self = read_json_settings().expect("Failed to read settings!");
+        // todo dumb hack because the state of the window being open is part of the struct
+        self.theme_menu_open = prev_theme_menu_open;
     }
 
     fn save(&self) {
         write_json_settings(self).expect("Failed to save settings!");
-    }
-
-    fn toggle_menu_visibility(&mut self) {
-        self.theme_menu_open = !self.theme_menu_open;
     }
 }
 
@@ -46,7 +47,6 @@ pub trait SettingsControl {
     fn restore_defaults(&mut self);
     fn reload(&mut self);
     fn save(&self);
-    fn toggle_menu_visibility(&mut self);
 }
 
 pub fn get_settings_path() -> PathBuf {
