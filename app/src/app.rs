@@ -325,6 +325,10 @@ impl BdiffApp {
     }
 
     fn handle_hex_view_input(&mut self, ctx: &Context) {
+        if self.file_views.is_empty() {
+            return;
+        }
+
         if ctx.input(|i| i.modifiers.shift) {
             // Move selection
             self.move_selection(ctx);

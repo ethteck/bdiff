@@ -72,7 +72,7 @@ impl SymbolTool {
         }
     }
 
-    fn load_elf_file(&mut self, path: &std::path::Path) {
+    fn load_elf_file(&mut self, _path: &std::path::Path) {
         self.map_file = None;
         // TODO
     }
