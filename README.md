@@ -2,7 +2,7 @@
 
 A(nother) binary diff tool, targeted toward decompilation and modding projects.
 
-![bdiff icon](/assets/icon.png)
+![bdiff icon](/app/assets/icon.png)
 
 ![image of bdiff UI](screenshot.png)
 
@@ -10,7 +10,7 @@ A(nother) binary diff tool, targeted toward decompilation and modding projects.
 - Automatic reload of opened files on change
 - Pairwise byte diff display (vbindiff style)
 - String, data viewer for various formats and encodings
-- Support for displaying symbol information from binaries by parsing json output from [mapfile_parser](https://github.com/Decompollaborate/mapfile_parser)
+- Support for displaying symbol information from binaries by parsing .map files via [mapfile_parser](https://github.com/Decompollaborate/mapfile_parser)
 
 bdiff is currently in the very early stages of development. See the [issues](https://github.com/ethteck/bdiff/issues) for planned features.
 
