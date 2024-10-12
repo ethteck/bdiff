@@ -48,7 +48,6 @@ impl DiffState {
         }
 
         if files.len() < 2 {
-            self.enabled = false;
             return;
         }
 

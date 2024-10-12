@@ -42,7 +42,6 @@ impl Default for ThemeSettings {
 pub fn show_theme_settings(ctx: &egui::Context, settings: &mut Settings) {
     egui::Window::new("Theme Settings")
         .title_bar(false)
-        .fixed_size((365.0, 0.0))
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label(

@@ -1,6 +1,6 @@
 [package]
 name = "bdiff"
-version = "0.8.5"
+version = "0.9.0"
 edition = "2021"
 authors = ["Ethan Roseman <ethteck@gmail.com>"]
 license = "MIT"
@@ -19,9 +19,9 @@ dirs = "5.0.1"
 dtoa = "1.0.9"
 eframe = { version = "0.29.1", features = ["persistence"] }
 egui-modal = "0.5.0"
-egui-phosphor = "0.7.2"
+egui-phosphor = "0.7.3"
 encoding_rs = "0.8.34"
-bdiff_hex_view = { version = "0.8.5", path="../hex_view" }
+bdiff_hex_view = { version = "0.9.0", path="../hex_view" }
 iset = "0.3.0"
 log = "0.4.22"
 mapfile_parser = "2.7.1"
