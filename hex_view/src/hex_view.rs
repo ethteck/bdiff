@@ -1,4 +1,4 @@
-use crate::{spacer::Spacer, theme::HexViewStyle, DiffState};
+use crate::{spacer::Spacer, theme::HexViewStyle};
 
 use egui::{self, Color32, FontId, Sense, Separator};
 
@@ -47,13 +47,7 @@ impl HexViewSelection {
         self.range.second.max(self.range.first)
     }
 
-    fn contains(&self, grid_pos: isize) -> bool {
-        if grid_pos < 0 {
-            return false;
-        }
-
-        let grid_pos = grid_pos as usize;
-
+    fn contains(&self, grid_pos: usize) -> bool {
         self.state != HexViewSelectionState::None
             && grid_pos >= self.start()
             && grid_pos <= self.end()
@@ -93,54 +87,37 @@ pub struct HexView {
     pub id: usize,
     pub style: HexViewStyle,
     pub bytes_per_row: usize,
-    pub cur_pos: isize,
+    pub num_rows: usize,
     pub selection: HexViewSelection,
-    pub cursor_pos: Option<isize>,
+    pub cursor_pos: Option<usize>,
 }
 
 impl HexView {
-    pub fn new(id: usize) -> Self {
-        let default_bytes_per_row = 0x10;
-
+    pub fn new(id: usize, bytes_per_row: usize, num_rows: usize) -> Self {
         Self {
             id,
             style: HexViewStyle::default(),
-            bytes_per_row: default_bytes_per_row,
-            cur_pos: 0,
+            bytes_per_row,
+            num_rows,
             selection: HexViewSelection::default(),
             cursor_pos: None,
         }
     }
 
-    pub fn set_cur_pos(&mut self, data: &[u8], val: isize) {
-        let last_line_start_address: isize =
-            (data.len() / self.bytes_per_row) as isize * self.bytes_per_row as isize;
-        self.cur_pos = val.min(last_line_start_address);
+    pub fn bytes_per_screen(&self) -> usize {
+        self.bytes_per_row * self.num_rows
     }
 
-    pub fn adjust_cur_pos(&mut self, data: &[u8], delta: isize) {
-        let last_line_start_address = (data.len() / self.bytes_per_row) * self.bytes_per_row;
-        self.cur_pos = (self.cur_pos + delta).min(last_line_start_address as isize);
-    }
+    pub fn get_cur_bytes(&self, data: &[u8], pos: isize) -> Vec<Option<u8>> {
+        let bytes_per_screen = self.bytes_per_row * self.num_rows;
 
-    pub fn num_rows(&self, data: &[u8]) -> usize {
-        let min_rows = 10;
-        let max_rows = 25;
-        (data.len() / self.bytes_per_row).clamp(min_rows, max_rows)
-    }
-
-    pub fn bytes_per_screen(&self, data: &[u8]) -> usize {
-        self.bytes_per_row * self.num_rows(data)
-    }
-
-    pub fn get_cur_bytes(&self, data: &[u8]) -> Vec<Option<u8>> {
-        if self.cur_pos > data.len() as isize {
-            vec![None; self.bytes_per_screen(data)]
+        if pos > 0 && (pos as usize) > data.len() {
+            vec![None; bytes_per_screen]
         } else {
-            let mut bytes = Vec::with_capacity(self.bytes_per_screen(data));
-            for i in 0..self.bytes_per_screen(data) {
-                let idx = self.cur_pos + i as isize;
-                if idx >= 0 && idx < data.len() as isize {
+            let mut bytes = Vec::with_capacity(bytes_per_screen);
+            for i in 0..bytes_per_screen {
+                let idx = pos + i as isize;
+                if idx >= 0 && (idx as usize) < data.len() {
                     bytes.push(Some(data[idx as usize]));
                 } else {
                     bytes.push(None);
@@ -212,9 +189,9 @@ impl HexView {
         &mut self,
         byte_grouping: usize,
         ui: &mut egui::Ui,
-        current_pos: isize,
+        start_pos: isize,
         row: &[Option<u8>],
-        diff_state: Option<&DiffState>,
+        diffs: Option<&[bool]>,
         can_selection_change: bool,
         cursor_state: CursorState,
     ) {
@@ -223,7 +200,7 @@ impl HexView {
             if i > 0 && (i % byte_grouping) == 0 {
                 ui.add(Spacer::default().spacing_x(4.0));
             }
-            let row_current_pos = current_pos + i as isize;
+            let pos = start_pos + i as isize;
 
             let byte: Option<u8> = row[i];
 
@@ -236,7 +213,11 @@ impl HexView {
                 egui::RichText::new(byte_text)
                     .font(FontId::monospace(self.style.font_size))
                     .color(
-                        if diff_state.is_some_and(|d| d.enabled && d.is_diff_at(row_current_pos)) {
+                        if pos >= 0
+                            && diffs.is_some_and(|diffs| {
+                            (pos as usize) < diffs.len() && diffs[pos as usize]
+                        })
+                        {
                             self.style.diff_color.clone()
                         } else {
                             match byte {
@@ -246,27 +227,27 @@ impl HexView {
                         },
                     )
                     .background_color({
-                        if self.selection.contains(row_current_pos) {
+                        if pos >= 0 && self.selection.contains(pos as usize) {
                             self.style.selection_color.clone()
                         } else {
                             Color32::TRANSPARENT.into()
                         }
                     }),
             )
-            .sense(Sense::click_and_drag());
+                .sense(Sense::click_and_drag());
 
             let res = ui.add(hex_label);
 
             if byte.is_some() {
                 if res.contains_pointer() {
-                    self.cursor_pos = Some(row_current_pos);
+                    self.cursor_pos = Some(pos as usize);
                 }
                 if can_selection_change {
                     self.handle_selection(
                         ui,
                         res,
                         cursor_state,
-                        row_current_pos,
+                        pos as usize,
                         HexViewSelectionSide::Hex,
                     );
                 }
@@ -308,28 +289,28 @@ impl HexView {
                         _ => self.style.other_ascii_color.clone(),
                     })
                     .background_color({
-                        if self.selection.contains(row_current_pos) {
+                        if row_current_pos >= 0 && self.selection.contains(row_current_pos as usize) {
                             self.style.selection_color.clone()
                         } else {
                             Color32::TRANSPARENT.into()
                         }
                     }),
             )
-            .sense(Sense::click_and_drag());
+                .sense(Sense::click_and_drag());
 
             let res = ui.add(hex_label);
             ui.add(Spacer::default().spacing_x(1.0));
 
             if byte.is_some() {
                 if res.contains_pointer() {
-                    self.cursor_pos = Some(row_current_pos);
+                    self.cursor_pos = Some(row_current_pos as usize);
                 }
                 if can_selection_change {
                     self.handle_selection(
                         ui,
                         res,
                         cursor_state,
-                        row_current_pos,
+                        row_current_pos as usize,
                         HexViewSelectionSide::Ascii,
                     );
                 }
@@ -342,10 +323,11 @@ impl HexView {
         &mut self,
         ui: &mut egui::Ui,
         data: &[u8],
+        offset: isize,
         cursor_state: CursorState,
         can_selection_change: bool,
         byte_grouping: usize,
-        diff_state: Option<&DiffState>,
+        diffs: Option<&[bool]>,
     ) {
         let grid_rect = egui::Grid::new(format!("hex_grid{}", self.id))
             .striped(true)
@@ -353,14 +335,13 @@ impl HexView {
             .min_col_width(0.0)
             .num_columns(40)
             .show(ui, |ui| {
-                let screen_bytes = self.get_cur_bytes(data);
-                let mut current_pos = self.cur_pos;
+                let screen_bytes = self.get_cur_bytes(data, offset);
+                let mut current_pos = offset;
 
                 let mut row_chunks = screen_bytes.chunks(self.bytes_per_row);
 
                 let mut r = 0;
-                let num_rows = self.num_rows(data);
-                while r < num_rows {
+                while r < self.num_rows {
                     let row = row_chunks.next().unwrap_or_default();
 
                     self.show_offset(data, current_pos, ui);
@@ -374,7 +355,7 @@ impl HexView {
                         ui,
                         current_pos,
                         row,
-                        diff_state,
+                        diffs,
                         can_selection_change,
                         cursor_state,
                     );
@@ -405,12 +386,12 @@ impl HexView {
         ui: &mut egui::Ui,
         res: egui::Response,
         cursor_state: CursorState,
-        row_current_pos: isize,
+        row_current_pos: usize,
         side: HexViewSelectionSide,
     ) {
         if res.hovered() {
             if cursor_state == CursorState::Pressed && row_current_pos > 0 {
-                self.selection.begin(row_current_pos as usize, side);
+                self.selection.begin(row_current_pos, side);
             }
 
             self.cursor_pos = Some(row_current_pos);
@@ -421,12 +402,12 @@ impl HexView {
                 match cursor_state {
                     CursorState::StillDown => {
                         if self.selection.state == HexViewSelectionState::Selecting {
-                            self.selection.update(row_current_pos as usize);
+                            self.selection.update(row_current_pos);
                         }
                     }
                     CursorState::Released => {
                         if self.selection.state == HexViewSelectionState::Selecting {
-                            self.selection.finalize(row_current_pos as usize);
+                            self.selection.finalize(row_current_pos);
                         }
                     }
                     _ => {}

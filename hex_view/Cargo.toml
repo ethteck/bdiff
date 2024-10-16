@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Ethan Roseman <ethteck@gmail.com>"]
 license = "MIT"
 repository = "https://github.com/ethteck/bdiff"
-readme = "README.md"
+readme = "../README.md"
 publish = false
 
 [dependencies]

@@ -4,7 +4,7 @@ use crate::settings::SettingsControl;
 use bdiff_hex_view::theme::Color;
 use eframe::egui::{Align, Direction, Layout, RichText, Ui, Vec2};
 
-pub fn window_bottom_commands(ui: &mut Ui, settings: &mut impl SettingsControl) {
+pub fn settings_management_buttons(ui: &mut Ui, settings: &mut impl SettingsControl) {
     ui.separator();
     ui.horizontal(|ui| {
         if ui
@@ -27,13 +27,9 @@ pub fn window_bottom_commands(ui: &mut Ui, settings: &mut impl SettingsControl) 
         }
         ui.separator();
 
-        ui.horizontal(|ui| {
-            ui.with_layout(Layout::right_to_left(Align::RIGHT), |ui| {
-                if ui.button("Save").clicked() {
-                    settings.save();
-                }
-            });
-        });
+        if ui.button("Save").clicked() {
+            settings.save();
+        }
     });
 }
 

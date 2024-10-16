@@ -17,25 +17,17 @@ pub use theme::show_theme_settings;
 #[derive(Deserialize, Serialize, Default, PartialEq, PartialOrd, Clone)]
 pub struct Settings {
     pub byte_grouping: ByteGrouping,
-    pub theme_settings: ThemeSettings,
-
-    #[serde(skip)]
-    pub theme_menu_open: bool,
+    pub diff_state_enabled: bool,
+    pub theme: ThemeSettings,
 }
 
 impl SettingsControl for Settings {
     fn restore_defaults(&mut self) {
-        let prev_theme_menu_open = self.theme_menu_open;
         *self = Settings::default();
-        // todo dumb hack because the state of the window being open is part of the struct
-        self.theme_menu_open = prev_theme_menu_open;
     }
 
     fn reload(&mut self) {
-        let prev_theme_menu_open = self.theme_menu_open;
         *self = read_json_settings().expect("Failed to read settings!");
-        // todo dumb hack because the state of the window being open is part of the struct
-        self.theme_menu_open = prev_theme_menu_open;
     }
 
     fn save(&self) {

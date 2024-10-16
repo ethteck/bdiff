@@ -8,18 +8,18 @@ use anyhow::{Context, Error};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Deserialize, Serialize)]
-pub struct FileConfig {
+pub struct WorkspaceFile {
     pub path: PathBuf,
     pub map: Option<PathBuf>,
 }
 
-impl From<PathBuf> for FileConfig {
+impl From<PathBuf> for WorkspaceFile {
     fn from(path: PathBuf) -> Self {
         Self { path, map: None }
     }
 }
 
-impl From<&Path> for FileConfig {
+impl From<&Path> for WorkspaceFile {
     fn from(path: &Path) -> Self {
         let path: PathBuf = path.into();
         Self { path, map: None }
@@ -27,20 +27,18 @@ impl From<&Path> for FileConfig {
 }
 
 #[derive(Clone, Deserialize, Serialize, Default)]
-pub struct Config {
-    pub files: Vec<FileConfig>,
-    #[serde(skip)]
-    pub changed: bool,
+pub struct Workspace {
+    pub files: Vec<WorkspaceFile>,
 }
 
-pub fn read_json_config(config_path: &Path) -> Result<Config, Error> {
+pub fn read_json_config(config_path: &Path) -> Result<Workspace, Error> {
     let mut reader = File::open(config_path)
         .with_context(|| format!("Failed to open config file at {}", config_path.display()))?;
     Ok(serde_json::from_reader(&mut reader)?)
 }
 
 #[allow(dead_code)]
-pub fn write_json_config<P: Into<PathBuf>>(config_path: P, config: &Config) -> Result<(), Error> {
+pub fn write_json_config<P: Into<PathBuf>>(config_path: P, config: &Workspace) -> Result<(), Error> {
     let path: PathBuf = config_path.into();
     let mut oo = OpenOptions::new();
     let mut writer = oo

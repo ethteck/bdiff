@@ -1,23 +1,23 @@
 use anyhow::Error;
-use bdiff_hex_view::{CursorState, DiffState, HexView, HexViewSelectionState};
+use bdiff_hex_view::{CursorState, HexView, HexViewSelectionState};
 use eframe::{
     egui::{self, Id},
     epaint::Color32,
 };
 
+use crate::tools::data_viewer::DataViewer;
+use crate::tools::string_viewer::StringViewer;
 use crate::{
-    bin_file::BinFile,
-    bin_file::{read_file_bytes, Endianness},
-    config::Config,
-    data_viewer::DataViewer,
+    bin_file::{read_file_bytes, BinFile, Endianness},
+    diff_state::DiffState,
     settings::Settings,
-    string_viewer::StringViewer,
-    symbol_tool::SymbolTool,
+    tools::symbol_tool::SymbolTool,
 };
 
 pub struct FileView {
     pub id: usize,
     pub file: BinFile,
+    pub cur_pos: usize,
     pub pos_locked: bool,
     pub show_selection_info: bool,
     pub show_cursor_info: bool,
@@ -29,14 +29,15 @@ pub struct FileView {
 }
 
 impl FileView {
-    pub fn new(file: BinFile, id: usize) -> Self {
+    pub fn new(file: BinFile, id: usize, bytes_per_row: usize, num_rows: usize) -> Self {
         Self {
             id,
             file,
+            cur_pos: 0,
             pos_locked: false,
             show_selection_info: true,
             show_cursor_info: true,
-            hv: HexView::new(id),
+            hv: HexView::new(id, bytes_per_row, num_rows),
             sv: StringViewer::default(),
             dv: DataViewer::default(),
             mt: SymbolTool::default(),
@@ -62,12 +63,12 @@ impl FileView {
 
     pub fn show(
         &mut self,
-        config: &mut Config,
         settings: &Settings,
         diff_state: &DiffState,
         ctx: &egui::Context,
         cursor_state: CursorState,
         can_selection_change: bool,
+        global_view_pos: usize,
     ) {
         egui::Window::new(self.file.path.to_str().unwrap())
             .id(Id::new(format!("hex_view_window_{}", self.id)))
@@ -90,7 +91,7 @@ impl FileView {
                                 .size(14.0)
                                 .color(Color32::LIGHT_GRAY),
                         )
-                        .on_hover_text(egui::RichText::new(file_name));
+                            .on_hover_text(egui::RichText::new(file_name));
 
                         let (lock_text, hover_text) = match self.pos_locked {
                             true => (
@@ -139,14 +140,6 @@ impl FileView {
 
                         if ui.button("X").on_hover_text("Close").clicked() {
                             self.closed = true;
-
-                            // Remove file from the config if it's closed.
-                            if let Some(pos) =
-                                config.files.iter().position(|a| a.path == self.file.path)
-                            {
-                                config.files.remove(pos);
-                                config.changed = true;
-                            }
                         }
                     },
                 );
@@ -156,13 +149,18 @@ impl FileView {
                     |ui: &mut egui::Ui| {
                         ui.vertical(|ui| {
                             ui.group(|ui| {
+                                let diffs = match settings.diff_state_enabled {
+                                    true => Some(&diff_state.diffs[..]),
+                                    false => None
+                                };
                                 self.hv.show(
                                     ui,
                                     &self.file.data,
+                                    global_view_pos as isize - self.cur_pos as isize, // TODO pass just the slice of data we care about, don't keep track of global pos inside hv
                                     cursor_state,
                                     can_selection_change,
                                     settings.byte_grouping.into(),
-                                    Some(diff_state),
+                                    diffs,
                                 );
                             });
 
@@ -212,12 +210,6 @@ impl FileView {
                             if self.show_cursor_info {
                                 let hover_text = match self.hv.cursor_pos {
                                     Some(pos) => {
-                                        if pos < 0 || pos >= self.file.data.len() as isize {
-                                            return;
-                                        }
-
-                                        let pos = pos as usize;
-
                                         let map_entry = match self.mt.map_file {
                                             Some(ref map_file) => map_file.get_entry(pos, pos + 1),
                                             None => None,

@@ -1,15 +1,16 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
+#![cfg_attr(
+    not(debug_assertions),
+    windows_subsystem = "windows"
+)] // hide console window on Windows in release
 
 mod app;
 mod bin_file;
-mod config;
-mod data_viewer;
+mod workspace;
+mod diff_state;
 mod file_view;
-mod map_file;
 mod settings;
-mod string_viewer;
-mod symbol_tool;
 mod watcher;
+mod tools;
 
 use std::path::PathBuf;
 

@@ -1,8 +1,8 @@
-use crate::settings::panels::{color_selection, window_bottom_commands};
+use crate::settings::panels::color_selection;
 use crate::settings::Settings;
 use bdiff_hex_view::HexViewStyle;
-use eframe::egui::{self, Color32};
-use eframe::egui::{Align, Layout, RichText};
+use eframe::egui::{self, Ui};
+use eframe::egui::{Align, Layout};
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
@@ -20,7 +20,7 @@ impl Display for VisualTheme {
             Self::Dark => "Dark",
             Self::Light => "Light",
         }
-        .to_string();
+            .to_string();
         write!(f, "{}", str)
     }
 }
@@ -39,114 +39,92 @@ impl Default for ThemeSettings {
         }
     }
 }
-pub fn show_theme_settings(ctx: &egui::Context, settings: &mut Settings) {
-    egui::Window::new("Theme Settings")
-        .title_bar(false)
-        .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label(
-                    egui::RichText::new("Theme Settings")
-                        .size(16.0)
-                        .color(Color32::LIGHT_GRAY),
-                );
+pub fn show_theme_settings(ui: &mut Ui, settings: &mut Settings) {
+    ui.label("Theme");
 
-                if ui.button("X").on_hover_text("Close").clicked() {
-                    settings.theme_menu_open = false;
-                }
-            });
+    // Font Colors
+    egui::Frame::group(ui.style()).show(ui, |ui| {
+        ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
+            egui::CollapsingHeader::new("Offset Colors")
+                .default_open(true)
+                .show(ui, |ui| {
+                    color_selection(
+                        ui,
+                        "Offset text color",
+                        &mut settings.theme.hex_view_style.offset_text_color,
+                    );
 
-            ui.horizontal(|ui| {
-                // Font Colors
-                egui::Frame::group(ui.style()).show(ui, |ui| {
-                    ui.with_layout(Layout::top_down(Align::LEFT), |ui| {
-                        ui.add(egui::Label::new(
-                            RichText::new("Hex View Colors").size(15.0),
-                        ));
-
-                        egui::CollapsingHeader::new("Offset Colors")
-                            .default_open(true)
-                            .show(ui, |ui| {
-                                color_selection(
-                                    ui,
-                                    "Offset text color",
-                                    &mut settings.theme_settings.hex_view_style.offset_text_color,
-                                );
-
-                                color_selection(
-                                    ui,
-                                    "Leading zero color",
-                                    &mut settings
-                                        .theme_settings
-                                        .hex_view_style
-                                        .offset_leading_zero_color,
-                                );
-                            });
-
-                        egui::CollapsingHeader::new("Hex Area Colors")
-                            .default_open(true)
-                            .show(ui, |ui| {
-                                color_selection(
-                                    ui,
-                                    "Selection color",
-                                    &mut settings.theme_settings.hex_view_style.selection_color,
-                                );
-                                color_selection(
-                                    ui,
-                                    "Diff color",
-                                    &mut settings.theme_settings.hex_view_style.diff_color,
-                                );
-                                color_selection(
-                                    ui,
-                                    "Null color",
-                                    &mut settings.theme_settings.hex_view_style.hex_null_color,
-                                );
-                                color_selection(
-                                    ui,
-                                    "Other color",
-                                    &mut settings.theme_settings.hex_view_style.other_hex_color,
-                                );
-                            });
-
-                        egui::CollapsingHeader::new("Ascii Area Colors")
-                            .default_open(true)
-                            .show(ui, |ui| {
-                                color_selection(
-                                    ui,
-                                    "Null color",
-                                    &mut settings.theme_settings.hex_view_style.ascii_null_color,
-                                );
-
-                                color_selection(
-                                    ui,
-                                    "Ascii color",
-                                    &mut settings.theme_settings.hex_view_style.ascii_color,
-                                );
-
-                                color_selection(
-                                    ui,
-                                    "Other color",
-                                    &mut settings.theme_settings.hex_view_style.other_ascii_color,
-                                );
-                            });
-                    });
+                    color_selection(
+                        ui,
+                        "Leading zero color",
+                        &mut settings
+                            .theme
+                            .hex_view_style
+                            .offset_leading_zero_color,
+                    );
                 });
 
-                // /// Visual Theme
-                // egui::Frame::group(ui.style()).show(ui, |ui| {
-                //     ui.vertical(|ui| {
-                //         ui.add(egui::Label::new(RichText::new("Visual Theme").heading()));
-                //
-                //         for theme in &[VisualTheme::Decompme, VisualTheme::UltraDark, VisualTheme::Light] {
-                //             ui.radio_value(
-                //                 &mut settings.theme_settings.active_theme,
-                //                 theme.clone(),
-                //                 theme.to_string(),
-                //             );
-                //         }
-                //     });
-                // });
-            });
+            egui::CollapsingHeader::new("Hex Area Colors")
+                .default_open(true)
+                .show(ui, |ui| {
+                    color_selection(
+                        ui,
+                        "Selection color",
+                        &mut settings.theme.hex_view_style.selection_color,
+                    );
+                    color_selection(
+                        ui,
+                        "Diff color",
+                        &mut settings.theme.hex_view_style.diff_color,
+                    );
+                    color_selection(
+                        ui,
+                        "Null color",
+                        &mut settings.theme.hex_view_style.hex_null_color,
+                    );
+                    color_selection(
+                        ui,
+                        "Other color",
+                        &mut settings.theme.hex_view_style.other_hex_color,
+                    );
+                });
 
-            window_bottom_commands(ui, settings);
+            egui::CollapsingHeader::new("Ascii Area Colors")
+                .default_open(true)
+                .show(ui, |ui| {
+                    color_selection(
+                        ui,
+                        "Null color",
+                        &mut settings.theme.hex_view_style.ascii_null_color,
+                    );
+
+                    color_selection(
+                        ui,
+                        "Ascii color",
+                        &mut settings.theme.hex_view_style.ascii_color,
+                    );
+
+                    color_selection(
+                        ui,
+                        "Other color",
+                        &mut settings.theme.hex_view_style.other_ascii_color,
+                    );
+                });
         });
+    });
+
+    // /// Visual Theme
+    // egui::Frame::group(ui.style()).show(ui, |ui| {
+    //     ui.vertical(|ui| {
+    //         ui.add(egui::Label::new(RichText::new("Visual Theme").heading()));
+    //
+    //         for theme in &[VisualTheme::Decompme, VisualTheme::UltraDark, VisualTheme::Light] {
+    //             ui.radio_value(
+    //                 &mut settings.theme_settings.active_theme,
+    //                 theme.clone(),
+    //                 theme.to_string(),
+    //             );
+    //         }
+    //     });
+    // });
 }
