@@ -113,8 +113,9 @@ impl BdiffApp {
             match ret.open_file(&file.path) {
                 Ok(fv) => {
                     if let Some(map) = file.map.as_ref() {
-                        fv.mt.load_file(map);
+                        fv.st.load_file(map);
                     }
+                    fv.file.endianness = file.endianness; // TODO hook up endianness saving
                 }
                 Err(e) => {
                     log::error!("Failed to open file: {}", e);
@@ -240,11 +241,36 @@ impl BdiffApp {
         self.global_view_pos = 0.max(self.global_view_pos as isize + delta) as usize;
     }
 
-    fn move_view(&mut self, ctx: &Context) {
-        let diffing = self.file_views.len() > 1 && self.settings.diff_state_enabled;
-        let bytes_per_screen = self.bytes_per_row * self.num_rows;
+    fn move_global_pos_enter(&mut self, longest_file_len: usize, bytes_per_screen: usize) {
+        if self.is_diffing() {
+            let last_byte = self.global_view_pos + bytes_per_screen;
 
+            if last_byte < longest_file_len {
+                match self.diff_state.get_next_diff(last_byte) {
+                    Some(next_diff) => {
+                        // Move to the next diff
+                        let new_pos = next_diff - (next_diff % self.bytes_per_row);
+                        self.set_global_pos(new_pos);
+                    }
+                    None => {
+                        // Move to the end of the file
+                        self.set_global_pos(0.max(longest_file_len - bytes_per_screen))
+                    }
+                }
+            }
+        } else {
+            // Move one screen down
+            self.move_global_pos(bytes_per_screen as isize);
+        }
+    }
+
+    fn is_diffing(&self) -> bool {
+        self.file_views.len() > 1 && self.settings.diff_enabled
+    }
+
+    fn move_view(&mut self, ctx: &Context) {
         let longest_file_len = self.file_views.iter().map(|fv| fv.file.data.len()).max().unwrap();
+        let bytes_per_screen = self.bytes_per_row * self.num_rows;
 
         // Keys
         if ctx.input(|i| i.key_pressed(egui::Key::Home)) {
@@ -272,26 +298,7 @@ impl BdiffApp {
             self.move_global_pos(self.bytes_per_row as isize);
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-            if diffing {
-                let last_byte = self.global_view_pos + bytes_per_screen;
-
-                if last_byte < longest_file_len {
-                    match self.diff_state.get_next_diff(last_byte) {
-                        Some(next_diff) => {
-                            // Move to the next diff
-                            let new_pos = next_diff - (next_diff % self.bytes_per_row);
-                            self.set_global_pos(new_pos);
-                        }
-                        None => {
-                            // Move to the end of the file
-                            self.set_global_pos(0.max(longest_file_len - bytes_per_screen))
-                        }
-                    }
-                }
-            } else {
-                // Move one screen down
-                self.move_global_pos(bytes_per_screen as isize);
-            }
+            self.move_global_pos_enter(longest_file_len, bytes_per_screen);
         }
 
         let scroll_y = ctx.input(|i| i.raw_scroll_delta.y);
@@ -497,10 +504,22 @@ impl eframe::App for BdiffApp {
                         goto_modal.open();
                         ui.close_menu();
                     }
+
+                    let enter_text = match self.is_diffing() {
+                        true => "Jump to next diff (Enter)",
+                        false => "Scroll one screen (Enter)",
+                    };
+
+                    if ui.button(enter_text).clicked() && self.file_views.len() > 1 {
+                        let longest_file_len = self.file_views.iter().map(|fv| fv.file.data.len()).max().unwrap();
+                        let bytes_per_screen = self.bytes_per_row * self.num_rows;
+
+                        self.move_global_pos_enter(longest_file_len, bytes_per_screen);
+                    }
                 });
 
                 ui.menu_button("Options", |ui| {
-                    let diff_checkbox = Checkbox::new(&mut self.settings.diff_state_enabled, "Display diff");
+                    let diff_checkbox = Checkbox::new(&mut self.settings.diff_enabled, "Display diff");
                     let mirror_selection_checkbox = Checkbox::new(
                         &mut self.options.mirror_selection,
                         "Mirror selection across files",
@@ -508,13 +527,12 @@ impl eframe::App for BdiffApp {
 
                     ui.label("Behavior");
 
-
                     ui.add_enabled(self.file_views.len() > 1, mirror_selection_checkbox);
 
                     if ui
                         .add_enabled(self.file_views.len() > 1, diff_checkbox)
                         .clicked()
-                        && self.settings.diff_state_enabled
+                        && self.settings.diff_enabled
                     {
                         self.recalculate_diffs()
                     }
@@ -562,6 +580,8 @@ impl eframe::App for BdiffApp {
                 cursor_state,
                 can_selection_change,
                 self.global_view_pos,
+                self.bytes_per_row,
+                self.num_rows,
             );
 
             if fv.closed {
@@ -648,8 +668,8 @@ impl eframe::App for BdiffApp {
                 }
             }
 
-            if fv.mt.map_file.is_some() {
-                let map_file = fv.mt.map_file.as_mut().unwrap();
+            if fv.st.map_file.is_some() {
+                let map_file = fv.st.map_file.as_mut().unwrap();
                 if map_file.modified.swap(false, Ordering::Relaxed) {
                     match map_file.reload() {
                         Ok(_) => {

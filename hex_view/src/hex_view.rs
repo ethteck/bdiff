@@ -104,29 +104,6 @@ impl HexView {
         }
     }
 
-    pub fn bytes_per_screen(&self) -> usize {
-        self.bytes_per_row * self.num_rows
-    }
-
-    pub fn get_cur_bytes(&self, data: &[u8], pos: isize) -> Vec<Option<u8>> {
-        let bytes_per_screen = self.bytes_per_row * self.num_rows;
-
-        if pos > 0 && (pos as usize) > data.len() {
-            vec![None; bytes_per_screen]
-        } else {
-            let mut bytes = Vec::with_capacity(bytes_per_screen);
-            for i in 0..bytes_per_screen {
-                let idx = pos + i as isize;
-                if idx >= 0 && (idx as usize) < data.len() {
-                    bytes.push(Some(data[idx as usize]));
-                } else {
-                    bytes.push(None);
-                }
-            }
-            bytes
-        }
-    }
-
     pub fn get_selected_bytes<'data>(&self, data: &'data [u8]) -> &'data [u8] {
         match self.selection.state {
             HexViewSelectionState::None => &[],
@@ -142,13 +119,7 @@ impl HexView {
         }
     }
 
-    fn show_offset(&mut self, data: &[u8], current_pos: isize, ui: &mut egui::Ui) {
-        let num_digits = match data.len() {
-            //0..=0xFFFF => 4,
-            0x10000..=0xFFFFFFFF => 8,
-            0x100000000..=0xFFFFFFFFFFFF => 12,
-            _ => 8,
-        };
+    fn show_offset(&mut self, num_digits: i32, current_pos: isize, ui: &mut egui::Ui) {
         let mut i: i32 = num_digits;
         let mut offset_leading_zeros = true;
 
@@ -190,8 +161,9 @@ impl HexView {
         byte_grouping: usize,
         ui: &mut egui::Ui,
         start_pos: isize,
+        start_diff_pos: usize,
         row: &[Option<u8>],
-        diffs: Option<&[bool]>,
+        diffs: &Option<&[bool]>,
         can_selection_change: bool,
         cursor_state: CursorState,
     ) {
@@ -201,6 +173,7 @@ impl HexView {
                 ui.add(Spacer::default().spacing_x(4.0));
             }
             let pos = start_pos + i as isize;
+            let diff_pos = start_diff_pos + i;
 
             let byte: Option<u8> = row[i];
 
@@ -213,11 +186,9 @@ impl HexView {
                 egui::RichText::new(byte_text)
                     .font(FontId::monospace(self.style.font_size))
                     .color(
-                        if pos >= 0
-                            && diffs.is_some_and(|diffs| {
-                            (pos as usize) < diffs.len() && diffs[pos as usize]
-                        })
-                        {
+                        if diffs.is_some_and(|diffs| {
+                            diff_pos < diffs.len() && diffs[diff_pos]
+                        }) {
                             self.style.diff_color.clone()
                         } else {
                             match byte {
@@ -322,12 +293,13 @@ impl HexView {
     pub fn show(
         &mut self,
         ui: &mut egui::Ui,
-        data: &[u8],
-        offset: isize,
+        data: &[Option<u8>],
+        diffs: &Option<&[bool]>,
+        global_pos: usize,
+        file_pos: usize,
         cursor_state: CursorState,
         can_selection_change: bool,
         byte_grouping: usize,
-        diffs: Option<&[bool]>,
     ) {
         let grid_rect = egui::Grid::new(format!("hex_grid{}", self.id))
             .striped(true)
@@ -335,16 +307,20 @@ impl HexView {
             .min_col_width(0.0)
             .num_columns(40)
             .show(ui, |ui| {
-                let screen_bytes = self.get_cur_bytes(data, offset);
-                let mut current_pos = offset;
-
-                let mut row_chunks = screen_bytes.chunks(self.bytes_per_row);
+                let mut current_pos = global_pos as isize - file_pos as isize;
+                let mut row_chunks = data.chunks(self.bytes_per_row);
 
                 let mut r = 0;
                 while r < self.num_rows {
                     let row = row_chunks.next().unwrap_or_default();
 
-                    self.show_offset(data, current_pos, ui);
+                    let num_digits = match data.len() {
+                        //0..=0xFFFF => 4,
+                        0x10000..=0xFFFFFFFF => 8,
+                        0x100000000..=0xFFFFFFFFFFFF => 12,
+                        _ => 8,
+                    };
+                    self.show_offset(num_digits, current_pos, ui);
 
                     ui.add(Spacer::default().spacing_x(8.0));
                     ui.add(Separator::default().vertical().spacing(0.0));
@@ -354,6 +330,7 @@ impl HexView {
                         byte_grouping,
                         ui,
                         current_pos,
+                        global_pos + (r * self.bytes_per_row),
                         row,
                         diffs,
                         can_selection_change,

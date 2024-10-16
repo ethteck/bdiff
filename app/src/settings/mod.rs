@@ -17,7 +17,7 @@ pub use theme::show_theme_settings;
 #[derive(Deserialize, Serialize, Default, PartialEq, PartialOrd, Clone)]
 pub struct Settings {
     pub byte_grouping: ByteGrouping,
-    pub diff_state_enabled: bool,
+    pub diff_enabled: bool,
     pub theme: ThemeSettings,
 }
 

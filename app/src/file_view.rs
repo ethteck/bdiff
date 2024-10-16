@@ -24,7 +24,7 @@ pub struct FileView {
     pub hv: HexView,
     sv: StringViewer,
     dv: DataViewer,
-    pub mt: SymbolTool,
+    pub st: SymbolTool,
     pub closed: bool,
 }
 
@@ -40,7 +40,7 @@ impl FileView {
             hv: HexView::new(id, bytes_per_row, num_rows),
             sv: StringViewer::default(),
             dv: DataViewer::default(),
-            mt: SymbolTool::default(),
+            st: SymbolTool::default(),
             closed: false,
         }
     }
@@ -61,6 +61,26 @@ impl FileView {
         Ok(())
     }
 
+    pub fn get_display_bytes(&self, global_offset: usize, num_bytes: usize) -> Vec<Option<u8>> {
+        let pos: isize = global_offset as isize - self.cur_pos as isize;
+
+        if pos > 0 && (pos as usize) > self.file.data.len() {
+            vec![None; num_bytes]
+        } else {
+            let mut bytes = Vec::with_capacity(num_bytes);
+            for i in 0..num_bytes {
+                let idx = pos + i as isize;
+                if idx >= 0 && (idx as usize) < self.file.data.len() {
+                    bytes.push(Some(self.file.data[idx as usize]));
+                } else {
+                    bytes.push(None);
+                }
+            }
+            bytes
+        }
+    }
+
+
     pub fn show(
         &mut self,
         settings: &Settings,
@@ -69,6 +89,8 @@ impl FileView {
         cursor_state: CursorState,
         can_selection_change: bool,
         global_view_pos: usize,
+        bytes_per_row: usize,
+        num_rows: usize,
     ) {
         egui::Window::new(self.file.path.to_str().unwrap())
             .id(Id::new(format!("hex_view_window_{}", self.id)))
@@ -135,7 +157,7 @@ impl FileView {
                             ui.checkbox(&mut self.show_cursor_info, "Cursor info");
                             ui.checkbox(&mut self.dv.show, "Data viewer");
                             ui.checkbox(&mut self.sv.show, "String viewer");
-                            ui.checkbox(&mut self.mt.show, "Symbols");
+                            ui.checkbox(&mut self.st.show, "Symbols");
                         });
 
                         if ui.button("X").on_hover_text("Close").clicked() {
@@ -149,18 +171,22 @@ impl FileView {
                     |ui: &mut egui::Ui| {
                         ui.vertical(|ui| {
                             ui.group(|ui| {
-                                let diffs = match settings.diff_state_enabled {
+                                let diffs = match settings.diff_enabled {
                                     true => Some(&diff_state.diffs[..]),
                                     false => None
                                 };
+
+                                let display_data = self.get_display_bytes(global_view_pos, bytes_per_row * num_rows);
+
                                 self.hv.show(
                                     ui,
-                                    &self.file.data,
-                                    global_view_pos as isize - self.cur_pos as isize, // TODO pass just the slice of data we care about, don't keep track of global pos inside hv
+                                    &display_data,
+                                    &diffs,
+                                    global_view_pos,
+                                    self.cur_pos,
                                     cursor_state,
                                     can_selection_change,
                                     settings.byte_grouping.into(),
-                                    diffs,
                                 );
                             });
 
@@ -172,7 +198,7 @@ impl FileView {
                                         let end = self.hv.selection.end();
                                         let length = end - start + 1;
 
-                                        let map_entry = match self.mt.map_file {
+                                        let map_entry = match self.st.map_file {
                                             Some(ref map_file) => {
                                                 map_file.get_entry(start, end + 1)
                                             }
@@ -210,7 +236,7 @@ impl FileView {
                             if self.show_cursor_info {
                                 let hover_text = match self.hv.cursor_pos {
                                     Some(pos) => {
-                                        let map_entry = match self.mt.map_file {
+                                        let map_entry = match self.st.map_file {
                                             Some(ref map_file) => map_file.get_entry(pos, pos + 1),
                                             None => None,
                                         };
@@ -246,7 +272,7 @@ impl FileView {
                                 self.hv.get_selected_bytes(&self.file.data),
                                 self.file.endianness,
                             );
-                            self.mt.display(ui);
+                            self.st.display(ui);
                         });
                     },
                 );

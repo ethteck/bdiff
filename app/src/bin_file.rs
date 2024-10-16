@@ -5,11 +5,11 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-use anyhow::Error;
-
 use crate::watcher::create_watcher;
+use anyhow::Error;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub enum Endianness {
     Little,
     #[default]
