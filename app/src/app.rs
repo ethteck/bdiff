@@ -1,15 +1,15 @@
-use crate::{diff_state::DiffState, settings};
+use crate::diff_state::DiffState;
 use std::{
     path::{Path, PathBuf},
     sync::atomic::Ordering,
 };
 
-use crate::settings::panels::settings_management_buttons;
+use crate::settings::ui::{byte_grouping_slider, show_settings_management_buttons};
 use crate::{
     bin_file::BinFile,
     file_view::FileView,
     settings::{read_json_settings, show_theme_settings, write_json_settings, Settings},
-    workspace::{read_json_config, write_json_config, Workspace, WorkspaceFile},
+    workspace::{read_workspace_json, write_workspace_json, Workspace, WorkspaceFile},
 };
 use anyhow::Error;
 use bdiff_hex_view::{CursorState, HexViewSelection, HexViewSelectionSide, HexViewSelectionState};
@@ -31,18 +31,6 @@ struct OverwriteModal {
     open: bool,
 }
 
-struct Options {
-    mirror_selection: bool,
-}
-
-impl Default for Options {
-    fn default() -> Self {
-        Self {
-            mirror_selection: true,
-        }
-    }
-}
-
 #[derive(Default)]
 pub struct BdiffApp {
     next_hv_id: usize,
@@ -51,11 +39,10 @@ pub struct BdiffApp {
     goto_modal: GotoModal,
     overwrite_modal: OverwriteModal,
     scroll_overflow: f32,
-    options: Options,
     global_selection: HexViewSelection, // the selection that all hex views will mirror
     selecting_hv: Option<usize>,
     last_selected_hv: Option<usize>,
-    bottom_bar_open: bool,
+    theme_editor_open: bool,
     settings: Settings,
     workspace: Workspace,
     started_with_arguments: bool,
@@ -81,6 +68,8 @@ impl BdiffApp {
 
         let started_with_arguments = !paths.is_empty();
 
+        let hv_style = settings.theme.hex_view_style.clone();
+
         let mut ret = Self {
             next_hv_id: 0,
             file_views: hex_views,
@@ -104,10 +93,11 @@ impl BdiffApp {
                 files: file_configs,
             }
         } else if config_path.exists() {
-            read_json_config(config_path).unwrap()
+            read_workspace_json(config_path).unwrap()
         } else {
             Workspace::default()
         };
+
 
         for file in config.files.iter() {
             match ret.open_file(&file.path) {
@@ -116,6 +106,7 @@ impl BdiffApp {
                         fv.st.load_file(map);
                     }
                     fv.file.endianness = file.endianness; // TODO hook up endianness saving
+                    fv.hv.set_style(hv_style.clone());
                 }
                 Err(e) => {
                     log::error!("Failed to open file: {}", e);
@@ -432,6 +423,19 @@ impl eframe::App for BdiffApp {
             }
         }
 
+        // Theme editor
+        let prev_theme = self.settings.theme.clone();
+        if self.theme_editor_open {
+            if show_theme_settings(ctx, &mut self.settings.theme) {
+                self.theme_editor_open = false;
+            }
+            if self.settings.theme != prev_theme {
+                for fv in self.file_views.iter_mut() {
+                    fv.hv.set_style(self.settings.theme.hex_view_style.clone());
+                }
+            }
+        }
+
         // Standard HexView input
         if !(overwrite_modal.is_open() || goto_modal.is_open()) {
             self.handle_hex_view_input(ctx);
@@ -488,7 +492,7 @@ impl eframe::App for BdiffApp {
                         if self.started_with_arguments {
                             self.overwrite_modal.open = true;
                         } else {
-                            write_json_config("bdiff.json", &self.workspace)
+                            write_workspace_json("bdiff.json", &self.workspace)
                                 .expect("Failed to write config");
                         };
                         ui.close_menu();
@@ -521,7 +525,7 @@ impl eframe::App for BdiffApp {
                 ui.menu_button("Options", |ui| {
                     let diff_checkbox = Checkbox::new(&mut self.settings.diff_enabled, "Display diff");
                     let mirror_selection_checkbox = Checkbox::new(
-                        &mut self.options.mirror_selection,
+                        &mut self.settings.mirror_selection,
                         "Mirror selection across files",
                     );
 
@@ -539,25 +543,34 @@ impl eframe::App for BdiffApp {
 
                     ui.separator();
                     ui.label("Interface");
-                    settings::byte_grouping_slider(ui, &mut self.settings.byte_grouping);
+                    byte_grouping_slider(ui, &mut self.settings.byte_grouping);
                     ui.add(Checkbox::new(
-                        &mut self.bottom_bar_open,
+                        &mut self.settings.show_quick_access_bar,
                         "Show Quick Access bar",
                     ));
 
                     ui.separator();
-                    show_theme_settings(ui, &mut self.settings);
 
-                    settings_management_buttons(ui, &mut self.settings);
+                    if ui.button("Theme").clicked() {
+                        self.theme_editor_open = !self.theme_editor_open;
+                    }
+
+                    let prev_hv_style = self.settings.theme.hex_view_style.clone();
+                    show_settings_management_buttons(ui, &mut self.settings);
+                    if self.settings.theme.hex_view_style != prev_hv_style {
+                        for fv in self.file_views.iter_mut() {
+                            fv.hv.set_style(self.settings.theme.hex_view_style.clone());
+                        }
+                    }
                 });
             })
         });
 
         // Quick Access bar
-        if self.bottom_bar_open {
+        if self.settings.show_quick_access_bar {
             egui::TopBottomPanel::bottom("bottom_panel").show(ctx, |ui| {
                 ui.with_layout(Layout::right_to_left(Align::LEFT), |ui| {
-                    settings::byte_grouping_slider(ui, &mut self.settings.byte_grouping);
+                    byte_grouping_slider(ui, &mut self.settings.byte_grouping);
                 });
             });
         }
@@ -574,9 +587,9 @@ impl eframe::App for BdiffApp {
             };
 
             fv.show(
+                ctx,
                 &self.settings,
                 &self.diff_state,
-                ctx,
                 cursor_state,
                 can_selection_change,
                 self.global_view_pos,
@@ -622,7 +635,7 @@ impl eframe::App for BdiffApp {
             }
         }
 
-        if self.options.mirror_selection {
+        if self.settings.mirror_selection {
             for fv in self.file_views.iter_mut() {
                 if fv.hv.selection != self.global_selection {
                     fv.hv.selection = self.global_selection.clone();
@@ -705,7 +718,7 @@ impl BdiffApp {
 
             modal.buttons(ui, |ui| {
                 if ui.button("Overwrite").clicked() {
-                    write_json_config("bdiff.json", &self.workspace).unwrap();
+                    write_workspace_json("bdiff.json", &self.workspace).unwrap();
                     self.overwrite_modal.open = false;
                 }
                 if ui.button("Cancel").clicked() {

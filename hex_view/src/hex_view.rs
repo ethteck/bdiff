@@ -1,5 +1,6 @@
 use crate::{spacer::Spacer, theme::HexViewStyle};
 
+use crate::byte_grouping::ByteGrouping;
 use egui::{self, Color32, FontId, Sense, Separator};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -104,6 +105,10 @@ impl HexView {
         }
     }
 
+    pub fn set_style(&mut self, style: HexViewStyle) {
+        self.style = style;
+    }
+
     pub fn get_selected_bytes<'data>(&self, data: &'data [u8]) -> &'data [u8] {
         match self.selection.state {
             HexViewSelectionState::None => &[],
@@ -158,8 +163,8 @@ impl HexView {
 
     fn show_hex(
         &mut self,
-        byte_grouping: usize,
         ui: &mut egui::Ui,
+        byte_grouping: ByteGrouping,
         start_pos: isize,
         start_diff_pos: usize,
         row: &[Option<u8>],
@@ -169,6 +174,8 @@ impl HexView {
     ) {
         let mut i = 0;
         while i < self.bytes_per_row {
+            let byte_grouping: usize = byte_grouping.into();
+
             if i > 0 && (i % byte_grouping) == 0 {
                 ui.add(Spacer::default().spacing_x(4.0));
             }
@@ -299,7 +306,7 @@ impl HexView {
         file_pos: usize,
         cursor_state: CursorState,
         can_selection_change: bool,
-        byte_grouping: usize,
+        byte_grouping: ByteGrouping,
     ) {
         let grid_rect = egui::Grid::new(format!("hex_grid{}", self.id))
             .striped(true)
@@ -327,8 +334,8 @@ impl HexView {
                     ui.add(Spacer::default().spacing_x(8.0));
 
                     self.show_hex(
-                        byte_grouping,
                         ui,
+                        byte_grouping,
                         current_pos,
                         global_pos + (r * self.bytes_per_row),
                         row,

@@ -83,9 +83,9 @@ impl FileView {
 
     pub fn show(
         &mut self,
+        ctx: &egui::Context,
         settings: &Settings,
         diff_state: &DiffState,
-        ctx: &egui::Context,
         cursor_state: CursorState,
         can_selection_change: bool,
         global_view_pos: usize,
@@ -186,7 +186,7 @@ impl FileView {
                                     self.cur_pos,
                                     cursor_state,
                                     can_selection_change,
-                                    settings.byte_grouping.into(),
+                                    settings.byte_grouping,
                                 );
                             });
 

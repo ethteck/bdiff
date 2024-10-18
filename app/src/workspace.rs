@@ -33,13 +33,13 @@ pub struct Workspace {
     pub files: Vec<WorkspaceFile>,
 }
 
-pub fn read_json_config(config_path: &Path) -> Result<Workspace, Error> {
+pub fn read_workspace_json(config_path: &Path) -> Result<Workspace, Error> {
     let mut reader = File::open(config_path)
         .with_context(|| format!("Failed to open config file at {}", config_path.display()))?;
     Ok(serde_json::from_reader(&mut reader)?)
 }
 
-pub fn write_json_config<P: Into<PathBuf>>(config_path: P, config: &Workspace) -> Result<(), Error> {
+pub fn write_workspace_json<P: Into<PathBuf>>(config_path: P, config: &Workspace) -> Result<(), Error> {
     let path: PathBuf = config_path.into();
     let mut oo = OpenOptions::new();
     let mut writer = oo

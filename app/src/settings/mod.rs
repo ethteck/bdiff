@@ -1,5 +1,6 @@
-use crate::settings::{byte_grouping::ByteGrouping, theme::ThemeSettings};
+use crate::settings::theme::ThemeSettings;
 use anyhow::{Context, Error};
+use bdiff_hex_view::byte_grouping::ByteGrouping;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
@@ -7,18 +8,30 @@ use std::{
     path::PathBuf,
 };
 
-mod byte_grouping;
-pub mod panels;
+pub mod ui;
 pub mod theme;
 
-pub use byte_grouping::byte_grouping_slider;
 pub use theme::show_theme_settings;
 
-#[derive(Deserialize, Serialize, Default, PartialEq, PartialOrd, Clone)]
+#[derive(Deserialize, Serialize, PartialEq, PartialOrd, Clone)]
 pub struct Settings {
-    pub byte_grouping: ByteGrouping,
+    pub mirror_selection: bool,
     pub diff_enabled: bool,
+    pub byte_grouping: ByteGrouping,
+    pub show_quick_access_bar: bool,
     pub theme: ThemeSettings,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            mirror_selection: true,
+            diff_enabled: true,
+            byte_grouping: ByteGrouping::default(),
+            show_quick_access_bar: false,
+            theme: ThemeSettings::default(),
+        }
+    }
 }
 
 impl SettingsControl for Settings {

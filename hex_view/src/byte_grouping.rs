@@ -1,9 +1,9 @@
-use eframe::egui;
-use eframe::emath::Numeric;
+use egui::emath::Numeric;
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 #[derive(Deserialize, Serialize, Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+#[serde(rename_all = "lowercase")]
 pub enum ByteGrouping {
     One,
     Two,
@@ -11,18 +11,6 @@ pub enum ByteGrouping {
     #[default]
     Eight,
     Sixteen,
-}
-
-impl ByteGrouping {
-    pub fn get_all_options() -> Vec<ByteGrouping> {
-        vec![
-            ByteGrouping::One,
-            ByteGrouping::Two,
-            ByteGrouping::Four,
-            ByteGrouping::Eight,
-            ByteGrouping::Sixteen,
-        ]
-    }
 }
 
 impl Display for ByteGrouping {
@@ -34,13 +22,13 @@ impl Display for ByteGrouping {
             Self::Eight => "Eight",
             Self::Sixteen => "Sixteen",
         }
-        .to_string();
+            .to_string();
         write!(f, "{}", str)
     }
 }
 
 impl Numeric for ByteGrouping {
-    const INTEGRAL: bool = false;
+    const INTEGRAL: bool = true;
     const MIN: Self = Self::One;
     const MAX: Self = Self::Sixteen;
 
@@ -76,13 +64,4 @@ impl From<ByteGrouping> for usize {
             ByteGrouping::Sixteen => 16,
         }
     }
-}
-
-pub fn byte_grouping_slider(ui: &mut egui::Ui, byte_grouping: &mut ByteGrouping) {
-    ui.add(
-        egui::Slider::new(byte_grouping, ByteGrouping::One..=ByteGrouping::Sixteen)
-            .text("Byte Grouping")
-            .logarithmic(true)
-            .integer(),
-    );
 }

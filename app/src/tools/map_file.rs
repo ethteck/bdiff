@@ -45,7 +45,7 @@ impl MapFile {
             ..Default::default()
         };
 
-        match create_watcher(path, ret.modified.clone()).map_err(anyhow::Error::new) {
+        match create_watcher(path, ret.modified.clone()).map_err(Error::new) {
             Ok(watcher) => {
                 ret.watcher = Some(watcher);
             }
