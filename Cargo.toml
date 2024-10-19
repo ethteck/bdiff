@@ -1,3 +1,9 @@
 [workspace]
 members = ["hex_view", "app"]
 resolver = "2"
+
+[profile.release-lto]
+inherits = "release"
+lto = "fat"
+strip = "debuginfo"
+codegen-units = 1
