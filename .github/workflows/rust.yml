@@ -45,17 +45,9 @@ jobs:
             name: linux-x86_64
             build: zigbuild
           - platform: ubuntu-latest
-            target: i686-unknown-linux-musl
-            name: linux-i686
-            build: zigbuild
-          - platform: ubuntu-latest
             target: aarch64-unknown-linux-musl
             name: linux-aarch64
             build: zigbuild
-          - platform: windows-latest
-            target: i686-pc-windows-msvc
-            name: windows-x86
-            build: build
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             name: windows-x86_64
