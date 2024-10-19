@@ -37,3 +37,9 @@ winres = "0.1.12"
 [build-dependencies]
 anyhow = "1.0"
 vergen-gitcl = { version = "1.0.1", features = ["build", "cargo"] }
+
+[profile.release-lto]
+inherits = "release"
+lto = "fat"
+strip = "debuginfo"
+codegen-units = 1

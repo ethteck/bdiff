@@ -29,9 +29,9 @@ jobs:
       - name: Cache Rust workspace
         uses: Swatinem/rust-cache@v2
       - name: Cargo check
-        run: cargo check --all-features
+        run: cargo check --all-features --all-targets
       - name: Cargo clippy
-        run: cargo clippy --all-features
+        run: cargo clippy --all-features --all-targets
 
   build:
     name: Build
