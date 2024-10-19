@@ -95,8 +95,12 @@ jobs:
         working-directory: artifacts
         run: |
           mkdir ../out
-          for i in */*/release/$CARGO_BIN_NAME*; do
-            mv "$i" "../out/$(sed -E "s/([^/]+)\/[^/]+\/release\/($CARGO_BIN_NAME)/\2-\1/" <<< "$i")"
+          for bin in $CARGO_BIN_NAME; do
+            for i in */*/release/$bin{,.exe}; do
+              if [ -f "$i" ]; do
+                mv "$i" "../out/$(sed -E "s/([^/]+)\/[^/]+\/release\/$bin/\1/" <<< "$i")"
+              fi
+            done
           done
           ls -R ../out
       - name: Release
