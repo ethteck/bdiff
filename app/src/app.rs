@@ -12,13 +12,14 @@ use crate::{
     workspace::{read_workspace_json, write_workspace_json, Workspace, WorkspaceFile},
 };
 use anyhow::Error;
-use bdiff_hex_view::{CursorState, HexViewSelection, HexViewSelectionSide, HexViewSelectionState};
+use bdiff_hex_view::cursor_state::CursorState;
+use bdiff_hex_view::selection::{HexViewSelection, HexViewSelectionSide, HexViewSelectionState};
 use eframe::egui::{Align, Layout, Modifiers, RichText, Ui};
 use eframe::{
     egui::{self, Checkbox, Context, Style, ViewportCommand},
     epaint::{Rounding, Shadow},
 };
-use egui_modal::Modal;
+use egui_modal::{Modal, ModalStyle};
 
 #[derive(Default)]
 struct GotoModal {
@@ -98,14 +99,12 @@ impl BdiffApp {
             Workspace::default()
         };
 
-
         for file in config.files.iter() {
             match ret.open_file(&file.path) {
                 Ok(fv) => {
                     if let Some(map) = file.map.as_ref() {
                         fv.st.load_file(map);
                     }
-                    fv.file.endianness = file.endianness; // TODO hook up endianness saving
                     fv.hv.set_style(hv_style.clone());
                 }
                 Err(e) => {
@@ -160,9 +159,7 @@ impl BdiffApp {
                     && fv.hv.selection.start() >= bytes_per_row
                     && fv.hv.selection.end() >= bytes_per_row
                 {
-                    fv.hv
-                        .selection
-                        .adjust_cur_pos(-(bytes_per_row as isize));
+                    fv.hv.selection.adjust_cur_pos(-(bytes_per_row as isize));
                     changed = true;
                 }
                 if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown))
@@ -212,7 +209,12 @@ impl BdiffApp {
             }
 
             // Keep positions zeroed
-            let lowest_fv_pos = self.file_views.iter_mut().map(|fv| fv.cur_pos).min().unwrap();
+            let lowest_fv_pos = self
+                .file_views
+                .iter_mut()
+                .map(|fv| fv.cur_pos)
+                .min()
+                .unwrap();
             if lowest_fv_pos > 0 {
                 for fv in self.file_views.iter_mut() {
                     fv.cur_pos -= lowest_fv_pos;
@@ -232,11 +234,11 @@ impl BdiffApp {
         self.global_view_pos = 0.max(self.global_view_pos as isize + delta) as usize;
     }
 
-    fn move_global_pos_enter(&mut self, longest_file_len: usize, bytes_per_screen: usize) {
+    fn move_global_pos_enter(&mut self, furthest_file_pos: usize, bytes_per_screen: usize) {
         if self.is_diffing() {
             let last_byte = self.global_view_pos + bytes_per_screen;
 
-            if last_byte < longest_file_len {
+            if last_byte < furthest_file_pos {
                 match self.diff_state.get_next_diff(last_byte) {
                     Some(next_diff) => {
                         // Move to the next diff
@@ -244,8 +246,8 @@ impl BdiffApp {
                         self.set_global_pos(new_pos);
                     }
                     None => {
-                        // Move to the end of the file
-                        self.set_global_pos(0.max(longest_file_len - bytes_per_screen))
+                        // Move to the end of the diff
+                        self.set_global_pos(0.max(furthest_file_pos - bytes_per_screen))
                     }
                 }
             }
@@ -259,39 +261,7 @@ impl BdiffApp {
         self.file_views.len() > 1 && self.settings.diff_enabled
     }
 
-    fn move_view(&mut self, ctx: &Context) {
-        let longest_file_len = self.file_views.iter().map(|fv| fv.file.data.len()).max().unwrap();
-        let bytes_per_screen = self.bytes_per_row * self.num_rows;
-
-        // Keys
-        if ctx.input(|i| i.key_pressed(egui::Key::Home)) {
-            self.set_global_pos(0);
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::End)) {
-            self.set_global_pos(0.max(longest_file_len - bytes_per_screen))
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
-            self.move_global_pos(-(bytes_per_screen as isize))
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
-            self.move_global_pos(bytes_per_screen as isize)
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
-            self.move_global_pos(-1);
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
-            self.move_global_pos(1);
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-            self.move_global_pos(-(self.bytes_per_row as isize));
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
-            self.move_global_pos(self.bytes_per_row as isize);
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
-            self.move_global_pos_enter(longest_file_len, bytes_per_screen);
-        }
-
+    fn scroll_view(&mut self, ctx: &Context) {
         let scroll_y = ctx.input(|i| i.raw_scroll_delta.y);
 
         // Scrolling
@@ -316,6 +286,48 @@ impl BdiffApp {
         }
     }
 
+    fn get_furthest_file_pos(&self) -> usize {
+        self.file_views
+            .iter()
+            .map(|fv| fv.cur_pos + fv.file.data.len())
+            .max()
+            .unwrap()
+    }
+
+    fn move_view(&mut self, ctx: &Context) {
+        let furthest_file_pos = self.get_furthest_file_pos();
+        let bytes_per_screen = self.bytes_per_row * self.num_rows;
+
+        // Keys
+        if ctx.input(|i| i.key_pressed(egui::Key::Home)) {
+            self.set_global_pos(0);
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::End)) {
+            self.set_global_pos(0.max(furthest_file_pos - bytes_per_screen))
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::PageUp)) {
+            self.move_global_pos(-(bytes_per_screen as isize))
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::PageDown)) {
+            self.move_global_pos(bytes_per_screen as isize)
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::ArrowLeft)) {
+            self.move_global_pos(-1);
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::ArrowRight)) {
+            self.move_global_pos(1);
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+            self.move_global_pos(-(self.bytes_per_row as isize));
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+            self.move_global_pos(self.bytes_per_row as isize);
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+            self.move_global_pos_enter(furthest_file_pos, bytes_per_screen);
+        }
+    }
+
     fn handle_hex_view_input(&mut self, ctx: &Context) {
         if self.file_views.is_empty() {
             return;
@@ -324,11 +336,43 @@ impl BdiffApp {
         if ctx.input(|i| i.modifiers.shift) {
             // Move selection
             self.move_selection(ctx);
-        } else if self.file_views.iter().any(|fv| fv.pos_locked) {
-            self.nudge_files(ctx);
         } else {
-            // Move view
-            self.move_view(ctx);
+            if self.file_views.iter().any(|fv| fv.pos_locked) {
+                self.nudge_files(ctx);
+            } else {
+                self.move_view(ctx);
+            }
+
+            // Scroll wheel
+            self.scroll_view(ctx);
+        }
+    }
+
+    fn copy_selected_bytes(&self, ctx: &Context) {
+        let mut selection = String::new();
+
+        for fv in self.file_views.iter() {
+            if self.last_selected_hv.is_some() && fv.id == self.last_selected_hv.unwrap() {
+                let selected_bytes = fv.hv.get_selected_bytes(&fv.file.data, fv.cur_pos);
+
+                let selected_bytes: String = match fv.hv.selection.side {
+                    HexViewSelectionSide::Hex => selected_bytes
+                        .iter()
+                        .map(|b| format!("{:02X}", b))
+                        .collect::<Vec<String>>()
+                        .join(" "),
+                    HexViewSelectionSide::Ascii => {
+                        String::from_utf8_lossy(selected_bytes).to_string()
+                    }
+                };
+                // convert selected_bytes to an ascii string
+
+                selection.push_str(&selected_bytes.to_string());
+            }
+        }
+
+        if !selection.is_empty() {
+            ctx.output_mut(|o| o.copied_text = selection);
         }
     }
 }
@@ -385,29 +429,20 @@ impl eframe::App for BdiffApp {
         style.interaction.multi_widget_text_select = false;
         ctx.set_style(style);
 
-        // Consume tab keypresses so they don't cause egui to switch focus
-        ctx.input_mut(|i| i.consume_key(Modifiers::NONE, egui::Key::Tab));
+        let cursor_state = CursorState::get(ctx);
 
-        let cursor_state: CursorState = ctx.input(|i| {
-            if i.pointer.primary_pressed() {
-                CursorState::Pressed
-            } else if i.pointer.primary_down() {
-                CursorState::StillDown
-            } else if i.pointer.primary_released() {
-                CursorState::Released
-            } else {
-                CursorState::Hovering
-            }
-        });
+        let modal_style = ModalStyle {
+            overlay_color: egui::Color32::from_black_alpha(100),
+            ..Default::default()
+        };
 
-        let goto_modal: Modal = Modal::new(ctx, "goto_modal");
+        let goto_modal: Modal = Modal::new(ctx, "goto_modal").with_style(&modal_style);
+        let overwrite_modal: Modal = Modal::new(ctx, "overwrite_modal").with_style(&modal_style);
 
         // Goto modal
         goto_modal.show(|ui| {
             self.show_goto_modal(&goto_modal, ui, ctx);
         });
-
-        let overwrite_modal: Modal = Modal::new(ctx, "overwrite_modal");
 
         if self.overwrite_modal.open {
             self.show_overwrite_modal(&overwrite_modal);
@@ -445,35 +480,6 @@ impl eframe::App for BdiffApp {
         if ctx.input(|i| !i.raw.dropped_files.is_empty()) {
             for file in ctx.input(|i| i.raw.dropped_files.clone()) {
                 let _ = self.open_file(&file.path.unwrap());
-            }
-        }
-
-        // Copy selection
-        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::C)) {
-            let mut selection = String::new();
-
-            for fv in self.file_views.iter() {
-                if self.last_selected_hv.is_some() && fv.id == self.last_selected_hv.unwrap() {
-                    let selected_bytes = fv.hv.get_selected_bytes(&fv.file.data);
-
-                    let selected_bytes: String = match fv.hv.selection.side {
-                        HexViewSelectionSide::Hex => selected_bytes
-                            .iter()
-                            .map(|b| format!("{:02X}", b))
-                            .collect::<Vec<String>>()
-                            .join(" "),
-                        HexViewSelectionSide::Ascii => {
-                            String::from_utf8_lossy(selected_bytes).to_string()
-                        }
-                    };
-                    // convert selected_bytes to an ascii string
-
-                    selection.push_str(&selected_bytes.to_string());
-                }
-            }
-
-            if !selection.is_empty() {
-                ctx.output_mut(|o| o.copied_text = selection);
             }
         }
 
@@ -515,15 +521,20 @@ impl eframe::App for BdiffApp {
                     };
 
                     if ui.button(enter_text).clicked() && self.file_views.len() > 1 {
-                        let longest_file_len = self.file_views.iter().map(|fv| fv.file.data.len()).max().unwrap();
-                        let bytes_per_screen = self.bytes_per_row * self.num_rows;
+                        self.move_global_pos_enter(
+                            self.get_furthest_file_pos(),
+                            self.bytes_per_row * self.num_rows,
+                        );
+                    }
 
-                        self.move_global_pos_enter(longest_file_len, bytes_per_screen);
+                    if ui.button("Copy selected bytes/hex").clicked() {
+                        self.copy_selected_bytes(ctx);
                     }
                 });
 
                 ui.menu_button("Options", |ui| {
-                    let diff_checkbox = Checkbox::new(&mut self.settings.diff_enabled, "Display diff");
+                    let diff_checkbox =
+                        Checkbox::new(&mut self.settings.diff_enabled, "Display diff");
                     let mirror_selection_checkbox = Checkbox::new(
                         &mut self.settings.mirror_selection,
                         "Mirror selection across files",
@@ -590,17 +601,17 @@ impl eframe::App for BdiffApp {
                 ctx,
                 &self.settings,
                 &self.diff_state,
-                cursor_state,
                 can_selection_change,
                 self.global_view_pos,
-                self.bytes_per_row,
-                self.num_rows,
             );
 
             if fv.closed {
                 // Remove file from the workspace if it's closed.
-                if let Some(pos) =
-                    self.workspace.files.iter().position(|a| a.path == fv.file.path)
+                if let Some(pos) = self
+                    .workspace
+                    .files
+                    .iter()
+                    .position(|a| a.path == fv.file.path)
                 {
                     self.workspace.files.remove(pos);
                 }
@@ -639,11 +650,6 @@ impl eframe::App for BdiffApp {
             for fv in self.file_views.iter_mut() {
                 if fv.hv.selection != self.global_selection {
                     fv.hv.selection = self.global_selection.clone();
-                    if fv.hv.selection.start() >= fv.file.data.len()
-                        || fv.hv.selection.end() >= fv.file.data.len()
-                    {
-                        fv.hv.selection.clear()
-                    }
                 }
             }
         }

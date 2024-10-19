@@ -4,7 +4,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::bin_file::Endianness;
 use anyhow::{Context, Error};
 use serde::{Deserialize, Serialize};
 
@@ -12,19 +11,18 @@ use serde::{Deserialize, Serialize};
 pub struct WorkspaceFile {
     pub path: PathBuf,
     pub map: Option<PathBuf>,
-    pub endianness: Endianness,
 }
 
 impl From<PathBuf> for WorkspaceFile {
     fn from(path: PathBuf) -> Self {
-        Self { path, map: None, endianness: Endianness::Big }
+        Self { path, map: None }
     }
 }
 
 impl From<&Path> for WorkspaceFile {
     fn from(path: &Path) -> Self {
         let path: PathBuf = path.into();
-        Self { path, map: None, endianness: Endianness::Big }
+        Self { path, map: None }
     }
 }
 

@@ -1,10 +1,3 @@
-use anyhow::Error;
-use bdiff_hex_view::{CursorState, HexView, HexViewSelectionState};
-use eframe::{
-    egui::{self, Id},
-    epaint::Color32,
-};
-
 use crate::tools::data_viewer::DataViewer;
 use crate::tools::string_viewer::StringViewer;
 use crate::{
@@ -12,6 +5,14 @@ use crate::{
     diff_state::DiffState,
     settings::Settings,
     tools::symbol_tool::SymbolTool,
+};
+use anyhow::Error;
+use bdiff_hex_view::cursor_state::CursorState;
+use bdiff_hex_view::selection::HexViewSelectionState;
+use bdiff_hex_view::{HexView, HexViewOptions, HexViewState};
+use eframe::{
+    egui::{self, Id},
+    epaint::Color32,
 };
 
 pub struct FileView {
@@ -48,8 +49,8 @@ impl FileView {
     pub fn reload_file(&mut self) -> Result<(), Error> {
         self.file.data = read_file_bytes(self.file.path.clone())?;
 
-        if self.hv.selection.range.first >= self.file.data.len()
-            && self.hv.selection.range.second >= self.file.data.len()
+        if self.hv.selection.start() >= self.file.data.len()
+            && self.hv.selection.end() >= self.file.data.len()
         {
             self.hv.selection.clear();
         } else {
@@ -61,36 +62,13 @@ impl FileView {
         Ok(())
     }
 
-    pub fn get_display_bytes(&self, global_offset: usize, num_bytes: usize) -> Vec<Option<u8>> {
-        let pos: isize = global_offset as isize - self.cur_pos as isize;
-
-        if pos > 0 && (pos as usize) > self.file.data.len() {
-            vec![None; num_bytes]
-        } else {
-            let mut bytes = Vec::with_capacity(num_bytes);
-            for i in 0..num_bytes {
-                let idx = pos + i as isize;
-                if idx >= 0 && (idx as usize) < self.file.data.len() {
-                    bytes.push(Some(self.file.data[idx as usize]));
-                } else {
-                    bytes.push(None);
-                }
-            }
-            bytes
-        }
-    }
-
-
     pub fn show(
         &mut self,
         ctx: &egui::Context,
         settings: &Settings,
         diff_state: &DiffState,
-        cursor_state: CursorState,
         can_selection_change: bool,
         global_view_pos: usize,
-        bytes_per_row: usize,
-        num_rows: usize,
     ) {
         egui::Window::new(self.file.path.to_str().unwrap())
             .id(Id::new(format!("hex_view_window_{}", self.id)))
@@ -113,18 +91,18 @@ impl FileView {
                                 .size(14.0)
                                 .color(Color32::LIGHT_GRAY),
                         )
-                            .on_hover_text(egui::RichText::new(file_name));
+                        .on_hover_text(egui::RichText::new(file_name));
 
                         let (lock_text, hover_text) = match self.pos_locked {
                             true => (
                                 egui::RichText::new(egui_phosphor::regular::LOCK_SIMPLE)
                                     .color(Color32::RED),
-                                "Unlock scroll position",
+                                "Unlock file position",
                             ),
                             false => (
                                 egui::RichText::new(egui_phosphor::regular::LOCK_SIMPLE_OPEN)
                                     .color(Color32::GREEN),
-                                "Lock scroll position",
+                                "Lock file position",
                             ),
                         };
                         if ui.button(lock_text).on_hover_text(hover_text).clicked() {
@@ -173,20 +151,30 @@ impl FileView {
                             ui.group(|ui| {
                                 let diffs = match settings.diff_enabled {
                                     true => Some(&diff_state.diffs[..]),
-                                    false => None
+                                    false => None,
                                 };
 
-                                let display_data = self.get_display_bytes(global_view_pos, bytes_per_row * num_rows);
+                                let num_offset_digits = match self.file.data.len() {
+                                    //0..=0xFFFF => 4,
+                                    0x10000..=0xFFFFFFFF => 8,
+                                    0x100000000..=0xFFFFFFFFFFFF => 12,
+                                    _ => 8,
+                                };
 
                                 self.hv.show(
                                     ui,
-                                    &display_data,
-                                    &diffs,
-                                    global_view_pos,
-                                    self.cur_pos,
-                                    cursor_state,
-                                    can_selection_change,
-                                    settings.byte_grouping,
+                                    &HexViewState {
+                                        file_data: &self.file.data,
+                                        file_pos: self.cur_pos,
+                                        global_pos: global_view_pos,
+                                        diffs,
+                                    },
+                                    CursorState::get(ctx),
+                                    HexViewOptions {
+                                        can_selection_change,
+                                        byte_grouping: settings.byte_grouping,
+                                        num_offset_digits,
+                                    },
                                 );
                             });
 
@@ -194,13 +182,21 @@ impl FileView {
                                 let selection_text = match self.hv.selection.state {
                                     HexViewSelectionState::None => "No selection".to_owned(),
                                     _ => {
-                                        let start = self.hv.selection.start();
-                                        let end = self.hv.selection.end();
+                                        // Convert to file coords
+                                        let start = self.hv.selection.start() as isize
+                                            - self.cur_pos as isize;
+                                        let end = self.hv.selection.end() as isize
+                                            - self.cur_pos as isize;
                                         let length = end - start + 1;
 
                                         let map_entry = match self.st.map_file {
                                             Some(ref map_file) => {
-                                                map_file.get_entry(start, end + 1)
+                                                if start >= 0 && end >= 0 {
+                                                    map_file
+                                                        .get_entry(start as usize, end as usize + 1)
+                                                } else {
+                                                    None
+                                                }
                                             }
                                             None => None,
                                         };
@@ -210,9 +206,17 @@ impl FileView {
                                                 format!("Selection: 0x{:X}", start)
                                             }
                                             _ => {
+                                                let start_str = match start < 0 {
+                                                    true => format!("-0x{:X}", -start),
+                                                    false => format!("0x{:X}", start),
+                                                };
+                                                let end_str = match end < 0 {
+                                                    true => format!("-0x{:X}", -end),
+                                                    false => format!("0x{:X}", end),
+                                                };
                                                 format!(
-                                                    "Selection: 0x{:X} - 0x{:X} (len 0x{:X})",
-                                                    start, end, length
+                                                    "Selection: {} - {} (len 0x{:X})",
+                                                    start_str, end_str, length
                                                 )
                                             }
                                         };
@@ -223,7 +227,7 @@ impl FileView {
                                                     "{} ({} + 0x{})",
                                                     beginning,
                                                     entry.symbol_name,
-                                                    start - entry.symbol_vrom
+                                                    start as usize - entry.symbol_vrom
                                                 )
                                             }
                                             None => beginning,
@@ -236,21 +240,31 @@ impl FileView {
                             if self.show_cursor_info {
                                 let hover_text = match self.hv.cursor_pos {
                                     Some(pos) => {
-                                        let map_entry = match self.st.map_file {
-                                            Some(ref map_file) => map_file.get_entry(pos, pos + 1),
-                                            None => None,
-                                        };
+                                        if pos < self.cur_pos {
+                                            "Not hovering".to_owned()
+                                        } else {
+                                            // Convert to file position from global position
+                                            let pos =
+                                                (pos as isize - self.cur_pos as isize) as usize;
 
-                                        match map_entry {
-                                            Some(entry) => {
-                                                format!(
-                                                    "Cursor: 0x{:X} ({} + 0x{})",
-                                                    pos,
-                                                    entry.symbol_name,
-                                                    pos - entry.symbol_vrom
-                                                )
+                                            let map_entry = match self.st.map_file {
+                                                Some(ref map_file) => {
+                                                    map_file.get_entry(pos, pos + 1)
+                                                }
+                                                None => None,
+                                            };
+
+                                            match map_entry {
+                                                Some(entry) => {
+                                                    format!(
+                                                        "Cursor: 0x{:X} ({} + 0x{})",
+                                                        pos,
+                                                        entry.symbol_name,
+                                                        pos - entry.symbol_vrom
+                                                    )
+                                                }
+                                                None => format!("Cursor: 0x{:X}", pos),
                                             }
-                                            None => format!("Cursor: 0x{:X}", pos),
                                         }
                                     }
                                     None => "Not hovering".to_owned(),
@@ -263,13 +277,13 @@ impl FileView {
                             self.dv.display(
                                 ui,
                                 self.id,
-                                self.hv.get_selected_bytes(&self.file.data),
+                                self.hv.get_selected_bytes(&self.file.data, self.cur_pos),
                                 self.file.endianness,
                             );
                             self.sv.display(
                                 ui,
                                 self.id,
-                                self.hv.get_selected_bytes(&self.file.data),
+                                self.hv.get_selected_bytes(&self.file.data, self.cur_pos),
                                 self.file.endianness,
                             );
                             self.st.display(ui);

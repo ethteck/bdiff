@@ -29,10 +29,13 @@ pub fn show_settings_management_buttons(ui: &mut Ui, settings: &mut impl Setting
         }
         ui.separator();
 
-        if ui.button(RichText::new(format!(
-            "{} Save",
-            egui_phosphor::regular::FLOPPY_DISK
-        ))).clicked() {
+        if ui
+            .button(RichText::new(format!(
+                "{} Save",
+                egui_phosphor::regular::FLOPPY_DISK
+            )))
+            .clicked()
+        {
             settings.save();
         }
     });

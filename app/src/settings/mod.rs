@@ -8,8 +8,8 @@ use std::{
     path::PathBuf,
 };
 
-pub mod ui;
 pub mod theme;
+pub mod ui;
 
 pub use theme::show_theme_settings;
 

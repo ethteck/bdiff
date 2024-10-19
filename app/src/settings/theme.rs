@@ -20,7 +20,7 @@ impl Display for VisualTheme {
             Self::Dark => "Dark",
             Self::Light => "Light",
         }
-            .to_string();
+        .to_string();
         write!(f, "{}", str)
     }
 }
@@ -65,9 +65,7 @@ pub fn show_theme_settings(ctx: &egui::Context, settings: &mut ThemeSettings) ->
                         color_selection(
                             ui,
                             "Leading zero color",
-                            &mut settings
-                                .hex_view_style
-                                .offset_leading_zero_color,
+                            &mut settings.hex_view_style.offset_leading_zero_color,
                         );
                     });
 
@@ -79,11 +77,7 @@ pub fn show_theme_settings(ctx: &egui::Context, settings: &mut ThemeSettings) ->
                             "Selection color",
                             &mut settings.hex_view_style.selection_color,
                         );
-                        color_selection(
-                            ui,
-                            "Diff color",
-                            &mut settings.hex_view_style.diff_color,
-                        );
+                        color_selection(ui, "Diff color", &mut settings.hex_view_style.diff_color);
                         color_selection(
                             ui,
                             "Null color",
