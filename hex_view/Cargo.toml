@@ -1,6 +1,6 @@
 [package]
 name = "bdiff_hex_view"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2021"
 authors = ["Ethan Roseman <ethteck@gmail.com>"]
 license = "MIT"

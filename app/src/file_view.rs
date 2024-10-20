@@ -81,7 +81,7 @@ impl FileView {
                         let name_limit = 50;
                         let file_name = self.file.path.as_path().to_str().unwrap();
                         let file_name_brief = if file_name.len() > name_limit {
-                            format!("...{}", &file_name[file_name.len() - name_limit - 3..])
+                            format!("...{}", &file_name[file_name.len() - name_limit..])
                         } else {
                             file_name.to_owned()
                         };
