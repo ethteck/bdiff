@@ -41,11 +41,11 @@ jobs:
       matrix:
         include:
           - platform: ubuntu-latest
-            target: x86_64-unknown-linux-musl
+            target: x86_64-unknown-linux-gnu
             name: linux-x86_64
             build: zigbuild
           - platform: ubuntu-latest
-            target: aarch64-unknown-linux-musl
+            target: aarch64-unknown-linux-gnu
             name: linux-aarch64
             build: zigbuild
           - platform: windows-latest
